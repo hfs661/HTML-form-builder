@@ -25,6 +25,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [useGoogleSearch, setUseGoogleSearch] = useState(false);
+  const [searchSources, setSearchSources] = useState<any[] | null>(null);
 
   // Save form elements to localStorage whenever they change
   useEffect(() => {
@@ -157,9 +159,13 @@ ${radioOptionsHtml}
     setIsLoading(true);
     setError(null);
     setSuggestedElements([]);
+    setSearchSources(null);
     try {
-        const suggestions = await getFormSuggestions(aiPrompt);
+        const { suggestions, sources } = await getFormSuggestions(aiPrompt, useGoogleSearch);
         setSuggestedElements(suggestions);
+        if (sources) {
+            setSearchSources(sources);
+        }
     } catch(err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -173,6 +179,8 @@ ${radioOptionsHtml}
     setSuggestedElements([]);
     setAiPrompt('');
     setShowClearConfirm(false);
+    setUseGoogleSearch(false);
+    setSearchSources(null);
   };
   
   const handleClearSuggestions = () => {
@@ -201,24 +209,57 @@ ${radioOptionsHtml}
         </div>
       </header>
        <div className="p-3 bg-brand-secondary border-b border-gray-300">
-            <div className="flex items-center space-x-2 max-w-2xl mx-auto">
-                <input
-                    type="text"
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Describe your form, e.g., 'A user registration form with name, email, and password'"
-                    className="flex-grow p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
-                    disabled={isLoading}
-                />
-                <button
-                    onClick={handleGetSuggestions}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-wait transition-colors"
-                >
-                    {isLoading ? 'Thinking...' : 'Get Suggestions'}
-                </button>
+            <div className="max-w-3xl mx-auto">
+                <div className="flex flex-col sm:flex-row items-center sm:space-x-2">
+                    <input
+                        type="text"
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        placeholder="Describe your form, e.g., 'A user registration form with name, email, and password'"
+                        className="flex-grow p-2 w-full border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
+                        disabled={isLoading}
+                    />
+                    <div className="flex items-stretch space-x-2 mt-2 sm:mt-0 w-full sm:w-auto">
+                        <button
+                            onClick={handleGetSuggestions}
+                            disabled={isLoading || !aiPrompt.trim()}
+                            className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex-grow sm:flex-grow-0"
+                        >
+                            {isLoading ? 'Thinking...' : 'Get Suggestions'}
+                        </button>
+                        <div 
+                            title="Use Google Search for more relevant and up-to-date suggestions"
+                            className="flex items-center p-2 rounded-md bg-white border border-gray-300 shadow-sm whitespace-nowrap"
+                        >
+                            <input
+                                type="checkbox"
+                                id="useGoogleSearch"
+                                checked={useGoogleSearch}
+                                onChange={(e) => setUseGoogleSearch(e.target.checked)}
+                                className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
+                            />
+                            <label htmlFor="useGoogleSearch" className="ml-2 text-sm text-gray-700 font-medium select-none cursor-pointer">
+                                Use Google Search
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                {error && <p className="text-red-500 text-center mt-2">{error}</p>}
+                {searchSources && searchSources.length > 0 && (
+                    <div className="mt-4 text-sm p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <h4 className="font-semibold text-blue-800">Sources from Google Search:</h4>
+                        <ul className="list-disc list-inside mt-1 space-y-1">
+                            {searchSources.filter(s => s.web && s.web.uri).map((source, index) => (
+                                <li key={index}>
+                                    <a href={source.web.uri} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">
+                                        {source.web.title || source.web.uri}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
             </div>
-            {error && <p className="text-red-500 text-center mt-2">{error}</p>}
         </div>
       <main className="flex flex-grow overflow-hidden">
         <Palette suggestedElements={suggestedElements} onClearSuggestions={handleClearSuggestions} />
