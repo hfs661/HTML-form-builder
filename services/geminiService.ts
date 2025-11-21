@@ -1,6 +1,6 @@
 
-
 import { GoogleGenAI, Type } from "@google/genai";
+import type { FormElement, ElementStyle } from "../types";
 
 if (!process.env.API_KEY) {
     console.warn("API_KEY environment variable not set. AI features will be disabled.");
@@ -45,6 +45,22 @@ const responseSchema = {
       required: ["type", "label", "name"],
       propertyOrdering: ["type", "label", "name", "placeholder", "options", "required"],
     },
+};
+
+const styleResponseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        backgroundColor: { type: Type.STRING },
+        textColor: { type: Type.STRING },
+        borderColor: { type: Type.STRING },
+        borderWidth: { type: Type.STRING },
+        borderRadius: { type: Type.STRING },
+        padding: { type: Type.STRING },
+        fontFamily: { type: Type.STRING, enum: ['sans', 'serif', 'mono'] },
+        fontWeight: { type: Type.STRING, enum: ['normal', 'bold'] }
+    },
+    required: [],
+    propertyOrdering: ["backgroundColor", "textColor", "borderColor", "borderWidth", "borderRadius", "padding", "fontFamily", "fontWeight"]
 };
 
 
@@ -121,3 +137,34 @@ export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolea
         throw new Error("Failed to get suggestions from AI. Please check the console for details.");
     }
 };
+
+export const getStyleSuggestions = async (element: FormElement): Promise<ElementStyle> => {
+    if (!process.env.API_KEY) {
+        throw new Error("API key is not configured.");
+    }
+    try {
+        const fullPrompt = `Suggest modern CSS styles for a form element with the following properties:
+        Type: ${element.type}
+        Label: ${element.label}
+        Name: ${element.name}
+        
+        Provide a JSON object with style properties that make this element look professional and modern.`;
+        
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: fullPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: styleResponseSchema,
+                temperature: 0.5,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const styles = JSON.parse(jsonText);
+        return styles;
+    } catch (error) {
+         console.error("Error fetching style suggestions:", error);
+        throw error;
+    }
+}

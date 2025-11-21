@@ -1,8 +1,10 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import Palette from './components/Palette';
 import Canvas from './components/Canvas';
 import PropertiesPanel from './components/PropertiesPanel';
 import CodeModal from './components/CodeModal';
+import PreviewModal from './components/PreviewModal';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import type { FormElement } from './types';
 import { getFormSuggestions } from './services/geminiService';
@@ -17,8 +19,14 @@ const App: React.FC = () => {
       return [];
     }
   });
+  
+  // History for Undo/Redo
+  const [history, setHistory] = useState<FormElement[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
   const [selectedElement, setSelectedElement] = useState<FormElement | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [suggestedElements, setSuggestedElements] = useState<Partial<FormElement>[]>([]);
@@ -28,130 +36,174 @@ const App: React.FC = () => {
   const [useGoogleSearch, setUseGoogleSearch] = useState(false);
   const [searchSources, setSearchSources] = useState<any[] | null>(null);
 
+  // Initialize history with initial state if valid
+  useEffect(() => {
+      if (history.length === 1 && history[0].length === 0 && formElements.length > 0) {
+          setHistory([formElements]);
+      }
+  }, []);
+
+  // Helper to update state and push to history
+  const updateFormElementsWithHistory = (newElements: FormElement[] | ((prev: FormElement[]) => FormElement[])) => {
+    setFormElements(prev => {
+        const resolvedElements = typeof newElements === 'function' ? newElements(prev) : newElements;
+        
+        // Avoid duplicates in history
+        const currentHistory = history.slice(0, historyIndex + 1);
+        const nextHistory = [...currentHistory, resolvedElements];
+        setHistory(nextHistory);
+        setHistoryIndex(nextHistory.length - 1);
+        
+        return resolvedElements;
+    });
+  };
+  
+  const handleUndo = () => {
+      if (historyIndex > 0) {
+          const prevIndex = historyIndex - 1;
+          setFormElements(history[prevIndex]);
+          setHistoryIndex(prevIndex);
+          setSelectedElement(null);
+      }
+  };
+
+  const handleRedo = () => {
+      if (historyIndex < history.length - 1) {
+          const nextIndex = historyIndex + 1;
+          setFormElements(history[nextIndex]);
+          setHistoryIndex(nextIndex);
+          setSelectedElement(null);
+      }
+  };
+
+
   // Save form elements to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('formBuilderElements', JSON.stringify(formElements));
   }, [formElements]);
 
+  // Recursive update helper for deep updates
+  const recursiveUpdateElement = (list: FormElement[], id: string, updatedProps: Partial<FormElement>): FormElement[] => {
+      return list.map(el => {
+          if (el.id === id) return { ...el, ...updatedProps };
+          if (el.children) return { ...el, children: recursiveUpdateElement(el.children, id, updatedProps) };
+          return el;
+      });
+  };
+
   const updateElement = useCallback((id: string, updatedProps: Partial<FormElement>) => {
-    setFormElements(prev =>
-      prev.map(el => (el.id === id ? { ...el, ...updatedProps } : el))
-    );
-    setSelectedElement(prev =>
-      prev?.id === id ? { ...prev, ...updatedProps } : prev
-    );
-  }, []);
+    updateFormElementsWithHistory((prev) => {
+        const updated = recursiveUpdateElement(prev, id, updatedProps);
+        // Update selected element locally so props panel reflects changes immediately
+        setSelectedElement(current => current?.id === id ? { ...current, ...updatedProps } : current);
+        return updated;
+    });
+  }, [history, historyIndex]); // Depend on history state to ensure correct closure
+
+  const generateHTML = (elements: FormElement[]) => {
+      const lines: string[] = [];
+      if (elements === formElements) lines.push('<form class="space-y-4 p-4">');
+      
+      elements.forEach(el => {
+          if (el.type === 'script') {
+              if (el.scriptContent) {
+                 lines.push(`  <script>\n    ${el.scriptContent.replace(/\n/g, '\n    ')}\n  </script>`);
+              }
+              return;
+          }
+
+          // Simple Style String generator
+          const getStyleString = (s: any) => {
+              if(!s) return '';
+              const styles = [];
+              if(s.backgroundColor) styles.push(`background-color: ${s.backgroundColor}`);
+              if(s.textColor) styles.push(`color: ${s.textColor}`);
+              if(s.borderColor) styles.push(`border-color: ${s.borderColor}`);
+              if(s.borderWidth) styles.push(`border-width: ${s.borderWidth}`);
+              if(s.borderRadius) styles.push(`border-radius: ${s.borderRadius}`);
+              if(s.padding) styles.push(`padding: ${s.padding}`);
+              if(s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
+              if(s.fontWeight) styles.push(`font-weight: ${s.fontWeight}`);
+              if(s.height) styles.push(`height: ${s.height}`);
+              return styles.length > 0 ? `style="${styles.join('; ')}"` : '';
+          };
+          const styleStr = getStyleString(el.styles);
+
+          if (el.type === 'container') {
+              lines.push(`  <div class="container-wrapper" ${styleStr}>`);
+              // Recurse
+              if (el.children) {
+                  lines.push(generateHTML(el.children));
+              }
+              lines.push('  </div>');
+              return;
+          }
+
+          // Start field wrapper
+          lines.push('  <div class="form-group">');
+          
+          // Label
+          if (!['button', 'news-card', 'iframe', 'navbar', 'container'].includes(el.type)) {
+              lines.push(`    <label for="${el.name}" class="block text-sm font-medium text-gray-700">${el.label}${el.required ? ' *' : ''}</label>`);
+          }
+          
+          // Element
+          let fieldHtml = '';
+          const requiredAttr = el.required ? 'required' : '';
+          const disabledAttr = el.disabled ? 'disabled' : '';
+          const errorAttr = el.customErrorMessage ? `data-error-message="${el.customErrorMessage}"` : '';
+          
+
+          switch (el.type) {
+              case 'text':
+              case 'number':
+              case 'date':
+              case 'color':
+              case 'file':
+              case 'range':
+                  fieldHtml = `    <input type="${el.subType || el.type}" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr} />`;
+                  break;
+              case 'textarea':
+                  fieldHtml = `    <textarea id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" rows="4" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr}></textarea>`;
+                  break;
+              case 'select':
+                  const optionsHtml = el.options?.map(opt => `<option value="${opt}">${opt}</option>`).join('') || '';
+                  fieldHtml = `    <select id="${el.name}" name="${el.name}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr}>${optionsHtml}</select>`;
+                  break;
+              case 'checkbox':
+                  fieldHtml = `    <div class="flex items-center"><input type="checkbox" id="${el.name}" name="${el.name}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr} /><label for="${el.name}">${el.label}</label></div>`;
+                  break;
+              case 'radio':
+                  fieldHtml = el.options?.map(opt => `    <div class="flex items-center"><input type="radio" name="${el.name}" value="${opt}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} /><label>${opt}</label></div>`).join('\n') || '';
+                  break;
+              case 'button':
+                  fieldHtml = `    <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-md" ${disabledAttr} ${styleStr}>${el.label}</button>`;
+                  break;
+              case 'iframe':
+                  fieldHtml = `    <iframe src="${el.src || 'about:blank'}" title="${el.label}" class="w-full border" ${styleStr}></iframe>`;
+                  break;
+              default:
+                  fieldHtml = `    <!-- Element type ${el.type} generation not fully supported yet -->`;
+          }
+          
+          lines.push(fieldHtml);
+          lines.push('  </div>');
+      });
+      
+      if (elements === formElements) lines.push('</form>');
+      return lines.join('\n');
+  };
 
   const generateCode = () => {
-    // Style mappings for generated code
-    const sizeClasses: Record<string, string> = {
-      small: 'p-1 text-sm rounded-sm',
-      medium: 'p-2 text-base rounded-md',
-      large: 'p-3 text-lg rounded-lg',
-    };
-    const buttonSizeClasses: Record<string, string> = {
-      small: 'px-3 py-1 text-sm rounded-sm',
-      medium: 'px-4 py-2 text-base rounded-md',
-      large: 'px-6 py-3 text-lg rounded-lg',
-    };
-    const checkboxRadioSizeClasses: Record<string, string> = {
-      small: 'h-3 w-3',
-      medium: 'h-4 w-4',
-      large: 'h-5 w-5',
-    };
-    const buttonColorClasses: Record<string, string> = {
-      primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-      secondary: 'bg-gray-600 hover:bg-gray-700 text-white',
-      danger: 'bg-red-600 hover:bg-red-700 text-white',
-    };
-
-    const html = formElements.map(el => {
-      const requiredAttr = el.required ? ' required' : '';
-      const disabledAttr = el.disabled ? ' disabled' : '';
-      const minLengthAttr = el.minLength != null ? ` minlength="${el.minLength}"` : '';
-      const maxLengthAttr = el.maxLength != null ? ` maxlength="${el.maxLength}"` : '';
-      const minAttr = el.min != null ? ` min="${el.min}"` : '';
-      const maxAttr = el.max != null ? ` max="${el.max}"` : '';
-      const stepAttr = el.step != null ? ` step="${el.step}"` : '';
-      const acceptAttr = el.accept ? ` accept="${el.accept}"` : '';
-
-      const currentSize = el.styles?.size || 'medium';
-
-      const labelHtml = `<label for="${el.name}" class="block text-sm font-medium text-gray-700 mb-1">${el.label}${el.required ? ' <span class="text-red-500">*</span>' : ''}</label>`;
-      const commonInputClasses = `w-full border border-gray-300 rounded-md shadow-sm`;
-
-      switch (el.type) {
-        case 'text':
-          const inputType = el.subType || 'text';
-          return `<div class="mb-4">
-  ${labelHtml}
-  <input type="${inputType}" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}"${requiredAttr}${minLengthAttr}${maxLengthAttr}${disabledAttr} class="${commonInputClasses} ${sizeClasses[currentSize]}">
-</div>`;
-        case 'textarea':
-          return `<div class="mb-4">
-  ${labelHtml}
-  <textarea id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" rows="4"${requiredAttr}${minLengthAttr}${maxLengthAttr}${disabledAttr} class="${commonInputClasses} ${sizeClasses[currentSize]}"></textarea>
-</div>`;
-        case 'select':
-          const optionsHtml = (el.options || []).map(opt => `    <option value="${opt}">${opt}</option>`).join('\n');
-          return `<div class="mb-4">
-  ${labelHtml}
-  <select id="${el.name}" name="${el.name}"${requiredAttr}${disabledAttr} class="${commonInputClasses} ${sizeClasses[currentSize]}">
-${optionsHtml}
-  </select>
-</div>`;
-        case 'checkbox':
-          return `<div class="mb-4 flex items-center">
-  <input id="${el.name}" name="${el.name}" type="checkbox"${requiredAttr}${disabledAttr} class="text-blue-600 border-gray-300 rounded ${checkboxRadioSizeClasses[currentSize]}">
-  <label for="${el.name}" class="ml-2 block text-sm text-gray-900">${el.label}</label>
-</div>`;
-        case 'radio':
-          const radioOptionsHtml = (el.options || []).map((opt, index) => `    <div class="flex items-center mt-1">
-      <input id="${el.name}-${index}" name="${el.name}" type="radio" value="${opt}"${index === 0 ? requiredAttr : ''}${disabledAttr} class="text-blue-600 border-gray-300 ${checkboxRadioSizeClasses[currentSize]}">
-      <label for="${el.name}-${index}" class="ml-2 block text-sm text-gray-900">${opt}</label>
-    </div>`).join('\n');
-          return `<div class="mb-4">
-  <label class="block text-sm font-medium text-gray-700 mb-1">${el.label}${el.required ? ' <span class="text-red-500">*</span>' : ''}</label>
-${radioOptionsHtml}
-</div>`;
-        case 'number':
-          return `<div class="mb-4">
-  ${labelHtml}
-  <input type="number" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}"${requiredAttr}${minAttr}${maxAttr}${stepAttr}${disabledAttr} class="${commonInputClasses} ${sizeClasses[currentSize]}">
-</div>`;
-        case 'date':
-          return `<div class="mb-4">
-  ${labelHtml}
-  <input type="date" id="${el.name}" name="${el.name}"${requiredAttr}${disabledAttr} class="${commonInputClasses} ${sizeClasses[currentSize]}">
-</div>`;
-        case 'range':
-          return `<div class="mb-4">
-  ${labelHtml}
-  <input type="range" id="${el.name}" name="${el.name}"${minAttr}${maxAttr}${stepAttr}${disabledAttr} class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-</div>`;
-        case 'file':
-          return `<div class="mb-4">
-  ${labelHtml}
-  <input type="file" id="${el.name}" name="${el.name}"${requiredAttr}${acceptAttr}${disabledAttr} class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100">
-</div>`;
-        case 'color':
-          return `<div class="mb-4">
-  ${labelHtml}
-  <input type="color" id="${el.name}" name="${el.name}" value="#0078D4"${disabledAttr} class="w-full h-10 border border-gray-300 rounded-md shadow-sm p-1">
-</div>`;
-        case 'button':
-            const buttonColorClass = buttonColorClasses[el.styles?.color || 'primary'];
-            const buttonSizeClass = buttonSizeClasses[currentSize];
-            return `<div class="mb-4">
-  <button type="submit"${requiredAttr}${disabledAttr} class="font-semibold rounded-md shadow-sm ${buttonColorClass} ${buttonSizeClass}">${el.label}</button>
-</div>`;
-        default:
-          return '';
-      }
-    }).join('\n\n');
-
-    setGeneratedCode(`<form>\n${html}\n</form>`);
+    const code = generateHTML(formElements);
+    setGeneratedCode(code);
     setShowCodeModal(true);
+  };
+  
+  const handleQuickCopy = () => {
+      const code = generateHTML(formElements);
+      navigator.clipboard.writeText(code);
+      alert('HTML Code copied to clipboard!');
   };
   
   const handleGetSuggestions = async () => {
@@ -174,7 +226,7 @@ ${radioOptionsHtml}
   };
 
   const handleClearAll = () => {
-    setFormElements([]);
+    updateFormElementsWithHistory([]);
     setSelectedElement(null);
     setSuggestedElements([]);
     setAiPrompt('');
@@ -190,8 +242,29 @@ ${radioOptionsHtml}
   return (
     <div className="flex flex-col h-screen font-sans text-brand-text">
       <header className="flex justify-between items-center p-3 bg-brand-primary text-white shadow-md z-10">
-        <h1 className="text-2xl font-bold">Power Form Builder AI</h1>
+        <div className="flex items-center space-x-4">
+            <h1 className="text-2xl font-bold">Power Form Builder AI</h1>
+            <div className="flex space-x-1 bg-brand-accent rounded-md p-1">
+                <button onClick={handleUndo} disabled={historyIndex === 0} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Undo">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
+                </button>
+                <button onClick={handleRedo} disabled={historyIndex === history.length - 1} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Redo">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                </button>
+            </div>
+        </div>
         <div className="flex items-center space-x-2">
+           <button
+            onClick={() => setShowPreviewModal(true)}
+            disabled={formElements.length === 0}
+            className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center"
+          >
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+            </svg>
+            Preview
+          </button>
            <button
             onClick={() => setShowClearConfirm(true)}
             disabled={formElements.length === 0 && suggestedElements.length === 0 && aiPrompt.trim() === ''}
@@ -199,13 +272,26 @@ ${radioOptionsHtml}
           >
             Clear All
           </button>
-          <button
-            onClick={generateCode}
-            disabled={formElements.length === 0}
-            className="px-4 py-2 bg-white text-brand-primary font-semibold rounded-md shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          >
-            Generate Code
-          </button>
+          <div className="relative group flex">
+            <button
+                onClick={handleQuickCopy}
+                disabled={formElements.length === 0}
+                className="px-4 py-2 bg-gray-100 text-brand-primary font-semibold rounded-l-md border-r border-gray-300 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center"
+                title="Quick Copy to Clipboard"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                Copy HTML
+            </button>
+            <button
+                onClick={generateCode}
+                disabled={formElements.length === 0}
+                className="px-4 py-2 bg-white text-brand-primary font-semibold rounded-r-md shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+                Generate Code
+            </button>
+          </div>
         </div>
       </header>
        <div className="p-3 bg-brand-secondary border-b border-gray-300">
@@ -265,12 +351,17 @@ ${radioOptionsHtml}
         <Palette suggestedElements={suggestedElements} onClearSuggestions={handleClearSuggestions} />
         <Canvas 
           elements={formElements} 
-          setElements={setFormElements} 
+          setElements={updateFormElementsWithHistory} 
           setSelectedElement={setSelectedElement} 
           selectedElement={selectedElement}
           updateElement={updateElement}
         />
-        <PropertiesPanel selectedElement={selectedElement} updateElement={updateElement} closePanel={() => setSelectedElement(null)} />
+        <PropertiesPanel 
+            selectedElement={selectedElement} 
+            updateElement={updateElement} 
+            closePanel={() => setSelectedElement(null)} 
+            allElements={formElements}
+        />
       </main>
 
       <ConfirmationDialog
@@ -284,6 +375,7 @@ ${radioOptionsHtml}
       />
 
       {showCodeModal && <CodeModal code={generatedCode} onClose={() => setShowCodeModal(false)} />}
+      {showPreviewModal && <PreviewModal elements={formElements} onClose={() => setShowPreviewModal(false)} />}
     </div>
   );
 };
