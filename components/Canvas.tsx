@@ -108,12 +108,12 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
     const createNewElement = (data: any): FormElement => ({
       id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: data.type as FormElementType,
-      label: data.label || (data.type === 'news-card' ? 'Latest News' : data.type === 'container' ? 'Container' : 'New Element'),
+      label: data.label || (data.type === 'news-card' ? 'Latest News' : data.type === 'container' ? 'Container' : data.type === 'accordion' ? 'Accordion Section' : 'New Element'),
       name: data.name || `element${Date.now()}`,
       placeholder: data.placeholder || '',
       options: data.options || (['select', 'radio'].includes(data.type) ? ['Option 1', 'Option 2'] : undefined),
       required: data.required || false,
-      children: data.type === 'container' ? [] : undefined,
+      children: ['container', 'accordion'].includes(data.type) ? [] : undefined,
       ...(data.type === 'text' && { subType: data.subType || 'text' }),
       ...((data.type === 'number' || data.type === 'range') && { min: 0, max: 100, step: 1 }),
       ...(data.type === 'file' && { accept: '' }),
@@ -232,8 +232,8 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
                       onStopEditing={() => setEditingElementId(null)}
                       onUpdate={updateElement}
                     >
-                        {/* Render Children if Container */}
-                        {element.type === 'container' && (
+                        {/* Render Children if Container or Accordion */}
+                        {['container', 'accordion'].includes(element.type) && (
                             <div className="min-h-[50px] pt-2">
                                 <RecursiveList items={element.children || []} parentId={element.id} />
                                 {/* Drop Zone inside Container (at the end) */}

@@ -57,10 +57,18 @@ const styleResponseSchema = {
         borderRadius: { type: Type.STRING },
         padding: { type: Type.STRING },
         fontFamily: { type: Type.STRING, enum: ['sans', 'serif', 'mono'] },
-        fontWeight: { type: Type.STRING, enum: ['normal', 'bold'] }
+        fontWeight: { type: Type.STRING, enum: ['normal', 'bold'] },
+        textAlign: { type: Type.STRING, enum: ['left', 'center', 'right', 'justify'] },
+        letterSpacing: { type: Type.STRING },
+        lineHeight: { type: Type.STRING },
+        textDecoration: { type: Type.STRING, enum: ['none', 'underline', 'line-through', 'overline'] },
+        boxShadow: { type: Type.STRING }
     },
     required: [],
-    propertyOrdering: ["backgroundColor", "textColor", "borderColor", "borderWidth", "borderRadius", "padding", "fontFamily", "fontWeight"]
+    propertyOrdering: [
+        "backgroundColor", "textColor", "borderColor", "borderWidth", "borderRadius", "padding", 
+        "fontFamily", "fontWeight", "textAlign", "letterSpacing", "lineHeight", "textDecoration", "boxShadow"
+    ]
 };
 
 
@@ -138,17 +146,21 @@ export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolea
     }
 };
 
-export const getStyleSuggestions = async (element: FormElement): Promise<ElementStyle> => {
+export const getStyleSuggestions = async (element: FormElement, stylePrompt?: string): Promise<ElementStyle> => {
     if (!process.env.API_KEY) {
         throw new Error("API key is not configured.");
     }
     try {
-        const fullPrompt = `Suggest modern CSS styles for a form element with the following properties:
+        let fullPrompt = `Suggest modern CSS styles for a form element with the following properties:
         Type: ${element.type}
         Label: ${element.label}
-        Name: ${element.name}
-        
-        Provide a JSON object with style properties that make this element look professional and modern.`;
+        Name: ${element.name}`;
+
+        if (stylePrompt) {
+            fullPrompt += `\n\nUser Style Request: "${stylePrompt}"\nPlease ensure the generated styles strictly match this request.`;
+        } else {
+             fullPrompt += `\n\nProvide a JSON object with style properties that make this element look professional and modern.`;
+        }
         
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
@@ -165,6 +177,45 @@ export const getStyleSuggestions = async (element: FormElement): Promise<Element
         return styles;
     } catch (error) {
          console.error("Error fetching style suggestions:", error);
+        throw error;
+    }
+}
+
+export const getScriptSuggestions = async (prompt: string): Promise<string> => {
+    if (!process.env.API_KEY) {
+        throw new Error("API key is not configured.");
+    }
+    try {
+        const fullPrompt = `Write a JavaScript code snippet for a web form based on this request: "${prompt}".
+        
+        - The code should be plain JavaScript (ES6+).
+        - It should assume it runs in the browser.
+        - Use document.querySelector to target elements by their 'name' attribute (e.g., document.querySelector('input[name="myField"]')).
+        - Do not include any explanation or markdown formatting (no \`\`\`js). Just valid JavaScript code.
+        - Ensure event listeners are added safely (check if element exists).`;
+        
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: fullPrompt,
+            config: {
+                temperature: 0.3,
+            },
+        });
+
+        let script = response.text.trim();
+        if (script.startsWith('```javascript')) {
+            script = script.substring(13);
+        } else if (script.startsWith('```js')) {
+            script = script.substring(5);
+        } else if (script.startsWith('```')) {
+            script = script.substring(3);
+        }
+        if (script.endsWith('```')) {
+            script = script.substring(0, script.length - 3);
+        }
+        return script.trim();
+    } catch (error) {
+         console.error("Error fetching script suggestions:", error);
         throw error;
     }
 }

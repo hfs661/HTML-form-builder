@@ -111,6 +111,13 @@ const App: React.FC = () => {
               }
               return;
           }
+          
+          if (el.type === 'html-block') {
+              if (el.htmlContent) {
+                  lines.push(`  ${el.htmlContent}`);
+              }
+              return;
+          }
 
           // Simple Style String generator
           const getStyleString = (s: any) => {
@@ -125,17 +132,71 @@ const App: React.FC = () => {
               if(s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
               if(s.fontWeight) styles.push(`font-weight: ${s.fontWeight}`);
               if(s.height) styles.push(`height: ${s.height}`);
+              if(s.width) styles.push(`width: ${s.width}`);
+              if(s.textAlign) styles.push(`text-align: ${s.textAlign}`);
+              if(s.letterSpacing) styles.push(`letter-spacing: ${s.letterSpacing}`);
+              if(s.lineHeight) styles.push(`line-height: ${s.lineHeight}`);
+              if(s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
+              if(s.boxShadow) styles.push(`box-shadow: ${s.boxShadow}`);
               return styles.length > 0 ? `style="${styles.join('; ')}"` : '';
           };
           const styleStr = getStyleString(el.styles);
 
           if (el.type === 'container') {
+              // Handle flexbox styles for container content
+              const s = el.styles || {};
+              const layoutStyles = [];
+              if (s.display === 'flex') {
+                  layoutStyles.push('display: flex');
+                  if(s.flexDirection) layoutStyles.push(`flex-direction: ${s.flexDirection}`);
+                  if(s.justifyContent) layoutStyles.push(`justify-content: ${s.justifyContent}`);
+                  if(s.alignItems) layoutStyles.push(`align-items: ${s.alignItems}`);
+                  if(s.gap) layoutStyles.push(`gap: ${s.gap}`);
+                  if(s.flexWrap) layoutStyles.push(`flex-wrap: ${s.flexWrap}`);
+              } else {
+                   // Default stack spacing if no flex
+                   // Actually we'll just omit specific layout styles and rely on block flow
+              }
+              
+              const layoutStyleStr = layoutStyles.length > 0 ? `style="${layoutStyles.join('; ')}"` : '';
+              const wrapperClass = s.display === 'flex' ? '' : 'space-y-2';
+
               lines.push(`  <div class="container-wrapper" ${styleStr}>`);
+              lines.push(`    <div class="container-content ${wrapperClass}" ${layoutStyleStr}>`);
               // Recurse
               if (el.children) {
                   lines.push(generateHTML(el.children));
               }
+              lines.push('    </div>');
               lines.push('  </div>');
+              return;
+          }
+          
+          if (el.type === 'accordion') {
+              lines.push(`  <details class="accordion-wrapper" ${styleStr}>`);
+              lines.push(`    <summary class="cursor-pointer font-bold p-2 bg-gray-50 border border-b-0">${el.label}</summary>`);
+              lines.push(`    <div class="accordion-content border p-2">`);
+              if (el.children) {
+                  lines.push(generateHTML(el.children));
+              }
+              lines.push('    </div>');
+              lines.push('  </details>');
+              return;
+          }
+          
+          if (el.type === 'typography') {
+              const Tag = el.headingLevel || 'p';
+              lines.push(`  <${Tag} ${styleStr}>${el.textContent || ''}</${Tag}>`);
+              return;
+          }
+          
+          if (el.type === 'divider') {
+              lines.push(`  <hr class="my-2" ${styleStr} />`);
+              return;
+          }
+          
+          if (el.type === 'image') {
+              lines.push(`  <div class="w-full"><img src="${el.src || ''}" alt="${el.altText || ''}" class="max-w-full h-auto" ${styleStr} /></div>`);
               return;
           }
 
@@ -143,7 +204,7 @@ const App: React.FC = () => {
           lines.push('  <div class="form-group">');
           
           // Label
-          if (!['button', 'news-card', 'iframe', 'navbar', 'container'].includes(el.type)) {
+          if (!['button', 'reset-button', 'news-card', 'iframe', 'navbar', 'container', 'html-block', 'typography', 'divider', 'image', 'accordion'].includes(el.type)) {
               lines.push(`    <label for="${el.name}" class="block text-sm font-medium text-gray-700">${el.label}${el.required ? ' *' : ''}</label>`);
           }
           
@@ -178,6 +239,9 @@ const App: React.FC = () => {
                   break;
               case 'button':
                   fieldHtml = `    <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-md" ${disabledAttr} ${styleStr}>${el.label}</button>`;
+                  break;
+              case 'reset-button':
+                  fieldHtml = `    <button type="reset" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md" ${disabledAttr} ${styleStr}>${el.label}</button>`;
                   break;
               case 'iframe':
                   fieldHtml = `    <iframe src="${el.src || 'about:blank'}" title="${el.label}" class="w-full border" ${styleStr}></iframe>`;
@@ -282,7 +346,7 @@ const App: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                 </svg>
-                Copy HTML
+                Copy to Clipboard
             </button>
             <button
                 onClick={generateCode}

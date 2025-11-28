@@ -1,7 +1,7 @@
 
 import type { ReactElement } from 'react';
 
-export type FormElementType = 'text' | 'textarea' | 'checkbox' | 'radio' | 'select' | 'button' | 'date' | 'number' | 'range' | 'file' | 'color' | 'table' | 'iframe' | 'navbar' | 'news-card' | 'container' | 'script';
+export type FormElementType = 'text' | 'textarea' | 'checkbox' | 'radio' | 'select' | 'button' | 'date' | 'number' | 'range' | 'file' | 'color' | 'table' | 'iframe' | 'navbar' | 'news-card' | 'container' | 'script' | 'html-block' | 'typography' | 'image' | 'divider' | 'accordion' | 'reset-button';
 
 export interface ElementStyle {
   color?: 'primary' | 'secondary' | 'danger'; // Legacy for buttons
@@ -16,6 +16,18 @@ export interface ElementStyle {
   borderWidth?: string;
   borderRadius?: string;
   padding?: string;
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
+  letterSpacing?: string;
+  lineHeight?: string;
+  textDecoration?: 'none' | 'underline' | 'line-through' | 'overline';
+  boxShadow?: string;
+  // Flexbox properties for Container
+  display?: 'block' | 'flex';
+  flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
+  justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around';
+  alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
+  gap?: string;
+  flexWrap?: 'nowrap' | 'wrap';
 }
 
 export interface ElementLogic {
@@ -50,7 +62,7 @@ export interface FormElement {
   // Logic
   logic?: ElementLogic;
   // Specifics
-  src?: string; // For iframe
+  src?: string; // For iframe or image
   rowCount?: number; // For table
   colCount?: number; // For table
   headers?: string[]; // For table
@@ -62,6 +74,13 @@ export interface FormElement {
   newsImage?: string;
   // Script Specifics
   scriptContent?: string;
+  // HTML Block Specifics
+  htmlContent?: string;
+  // Typography Specifics
+  textContent?: string;
+  headingLevel?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'p' | 'span';
+  // Image Specifics
+  altText?: string;
 }
 
 export interface PaletteItem {

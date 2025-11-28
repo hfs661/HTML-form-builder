@@ -29,7 +29,7 @@ const checkboxRadioSizeClasses: Record<string, string> = {
 const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStartEditing, onStopEditing, onUpdate, preview = false, hidden = false, children }) => {
   if (hidden && element.type !== 'script') return null;
 
-  const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent } = element;
+  const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent, htmlContent, textContent, headingLevel, altText } = element;
 
   // Execute Script in Preview Mode
   useEffect(() => {
@@ -60,6 +60,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       borderRadius: styles?.borderRadius,
       padding: styles?.padding,
       color: styles?.textColor,
+      textAlign: styles?.textAlign || 'left',
+      letterSpacing: styles?.letterSpacing,
+      lineHeight: styles?.lineHeight,
+      textDecoration: styles?.textDecoration,
+      boxShadow: styles?.boxShadow,
   };
 
   const currentSize = styles?.size || 'medium';
@@ -69,7 +74,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   
   // Only apply border/bg styles to the input itself if specified, otherwise use defaults
   const inputStyle = { ...customStyle };
-  const containerStyle = { ...customStyle, borderWidth: 0, backgroundColor: 'transparent' }; // Container handles spacing but not borders usually
+  const containerStyle = { ...customStyle, borderWidth: 0, backgroundColor: 'transparent', boxShadow: 'none' }; // Container handles spacing but not borders usually
 
   // Handle input change for label editing
   const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -110,6 +115,32 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       </span>
     );
   };
+  
+  const AccordionComponent = () => {
+      // By default open in builder, closed in preview or let user toggle
+      const [isOpen, setIsOpen] = useState(true);
+      
+      return (
+        <div className="w-full border rounded-md overflow-hidden" style={customStyle}>
+            <button 
+                type="button"
+                onClick={() => setIsOpen(!isOpen)} 
+                className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
+            >
+                <div className="font-medium text-gray-700"><EditableLabel /></div>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+            </button>
+            {isOpen && (
+                <div className="p-4 border-t border-gray-200">
+                    {children}
+                    {!children && preview && <div className="text-xs text-gray-400 italic">Empty Accordion</div>}
+                </div>
+            )}
+        </div>
+      );
+  }
 
   // News Card Component Internal State
   const NewsCardComponent = () => {
@@ -136,7 +167,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         : "https://via.placeholder.com/600x300?text=Latest+News";
 
       return (
-          <div className={`border rounded-lg overflow-hidden shadow-sm bg-white ${pointerEvents}`} style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px', borderRadius: styles?.borderRadius || '0.5rem' }}>
+          <div className={`border rounded-lg overflow-hidden shadow-sm bg-white ${pointerEvents}`} style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px', borderRadius: styles?.borderRadius || '0.5rem', boxShadow: styles?.boxShadow }}>
               <img src={displayImage} alt={newsTitle || "News"} className="w-full h-48 object-cover" />
               <div className="p-4">
                   <h3 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{newsTitle}</h3>
@@ -185,6 +216,66 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
 
   switch (type) {
+    case 'html-block':
+        if (!htmlContent && !preview) {
+            return (
+                <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded" style={containerStyle}>
+                     &lt;HTML /&gt; Block: Edit properties to add content
+                </div>
+            );
+        }
+        return (
+            <div 
+                className="w-full" 
+                style={customStyle}
+                dangerouslySetInnerHTML={{ __html: htmlContent || '' }}
+            />
+        );
+    case 'divider':
+        return (
+            <hr className="w-full border-t my-2" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} />
+        );
+    case 'image':
+         return (
+            <div className="w-full" style={containerStyle}>
+                <img 
+                    src={src || "https://via.placeholder.com/300x200?text=Image+Placeholder"} 
+                    alt={altText || label} 
+                    className={`max-w-full h-auto ${pointerEvents}`}
+                    style={{
+                        borderRadius: styles?.borderRadius,
+                        borderColor: styles?.borderColor,
+                        borderWidth: styles?.borderWidth,
+                        borderStyle: styles?.borderWidth ? 'solid' : 'none',
+                        width: styles?.width,
+                        height: styles?.height,
+                        boxShadow: styles?.boxShadow
+                    }}
+                />
+                {!src && !preview && <div className="text-xs text-gray-500 italic mt-1">Select to set Image URL</div>}
+            </div>
+         );
+    case 'typography':
+        const Tag = (headingLevel || 'p') as React.ElementType;
+        const textClasses = {
+            h1: 'text-4xl font-bold mb-4',
+            h2: 'text-3xl font-bold mb-3',
+            h3: 'text-2xl font-bold mb-3',
+            h4: 'text-xl font-bold mb-2',
+            h5: 'text-lg font-bold mb-2',
+            h6: 'text-base font-bold mb-2',
+            p: 'text-base mb-2',
+            span: 'text-base'
+        };
+        const defaultText = textContent || (isEditing ? '' : 'Double click to edit text');
+        
+        return (
+            <div style={containerStyle} className="w-full">
+                 <Tag className={`${textClasses[headingLevel || 'p']}`} style={customStyle}>
+                    {defaultText}
+                 </Tag>
+            </div>
+        );
     case 'script':
         if (preview) return null; // Invisible in preview
         return (
@@ -201,17 +292,30 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             </div>
         );
     case 'container':
+        // Flexbox logic for children wrapper
+        const contentStyle: React.CSSProperties = {
+            display: styles?.display || 'block', // Default to block if not specified
+            flexDirection: styles?.flexDirection,
+            justifyContent: styles?.justifyContent,
+            alignItems: styles?.alignItems,
+            gap: styles?.gap || (styles?.display === 'flex' ? '1rem' : undefined),
+            flexWrap: styles?.flexWrap,
+        };
+        const defaultStackClass = (styles?.display === 'flex') ? '' : 'space-y-2';
+
         return (
             <div className="w-full p-4 border border-dashed border-gray-300 rounded-md min-h-[100px]" style={customStyle}>
                 <div className="mb-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
                 </div>
-                <div className="space-y-2">
+                <div className={`${defaultStackClass}`} style={contentStyle}>
                     {children}
                     {!children && preview && <div className="text-xs text-gray-400 italic">Empty Container</div>}
                 </div>
             </div>
         );
+    case 'accordion':
+        return <AccordionComponent />;
     case 'text':
       return (
         <div className="w-full" style={containerStyle}>
@@ -313,7 +417,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                 borderRadius: styles?.borderRadius,
                 fontFamily: styles?.fontFamily,
                 fontWeight: styles?.fontWeight,
-                padding: styles?.padding
+                padding: styles?.padding,
+                letterSpacing: styles?.letterSpacing,
+                lineHeight: styles?.lineHeight,
+                textDecoration: styles?.textDecoration,
+                boxShadow: styles?.boxShadow,
             }}
             onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}
             aria-disabled={disabled}
@@ -321,6 +429,32 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             {label}
          </button>
       );
+    case 'reset-button':
+        return (
+            <button 
+               type="reset" 
+               disabled={disabled} 
+               className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 bg-gray-200 hover:bg-gray-300 text-gray-800 ${sizeClass} ${disabledClass}`}
+               style={{
+                   backgroundColor: styles?.backgroundColor,
+                   color: styles?.textColor,
+                   borderColor: styles?.borderColor,
+                   borderWidth: styles?.borderWidth,
+                   borderRadius: styles?.borderRadius,
+                   fontFamily: styles?.fontFamily,
+                   fontWeight: styles?.fontWeight,
+                   padding: styles?.padding,
+                   letterSpacing: styles?.letterSpacing,
+                   lineHeight: styles?.lineHeight,
+                   textDecoration: styles?.textDecoration,
+                   boxShadow: styles?.boxShadow,
+               }}
+               onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}
+               aria-disabled={disabled}
+            >
+               {label}
+            </button>
+         );
     
     case 'table':
         const cols = element.colCount || 3;
@@ -330,7 +464,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         return (
             <div className="w-full overflow-x-auto" style={containerStyle}>
                 <label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-                <table className="min-w-full border-collapse border border-gray-300 bg-white text-sm" style={{ borderColor: styles?.borderColor }}>
+                <table className="min-w-full border-collapse border border-gray-300 bg-white text-sm" style={{ borderColor: styles?.borderColor, boxShadow: styles?.boxShadow }}>
                     <thead className="bg-gray-50">
                         <tr>
                             {ths.map((h, i) => (
@@ -357,7 +491,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                  <iframe 
                     src={src || "about:blank"} 
                     className={`w-full border border-gray-300 bg-gray-100 ${pointerEvents}`}
-                    style={{ height: styles?.height || '300px', borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius }}
+                    style={{ height: styles?.height || '300px', borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius, boxShadow: styles?.boxShadow }}
                     title={label}
                  />
                  {!src && <div className="text-xs text-gray-500 italic mt-1">Select element to set Source URL in properties.</div>}

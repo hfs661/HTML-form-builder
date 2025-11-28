@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import type { FormElement } from '../types';
-import { getStyleSuggestions } from '../services/geminiService';
+import { getStyleSuggestions, getScriptSuggestions } from '../services/geminiService';
 
 interface PropertiesPanelProps {
   selectedElement: FormElement | null;
@@ -26,15 +26,16 @@ const PropertyInput: React.FC<{ label: string; name: string; value: string | num
     </div>
 );
 
-const PropertyTextarea: React.FC<{ label: string; value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; placeholder?: string }> = ({ label, value, onChange, placeholder }) => (
+const PropertyTextarea: React.FC<{ label: string; value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; placeholder?: string, rows?: number, fontFamily?: string }> = ({ label, value, onChange, placeholder, rows=4, fontFamily }) => (
     <div className="mb-3">
         <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
         <textarea
             value={value}
             onChange={onChange}
             placeholder={placeholder}
-            rows={4}
+            rows={rows}
             className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
+            style={{ fontFamily }}
         />
     </div>
 );
@@ -96,6 +97,9 @@ const CollapsibleSection: React.FC<{ title: string; children: React.ReactNode; d
 const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, updateElement, closePanel, allElements }) => {
   const [activeTab, setActiveTab] = useState<'props' | 'style' | 'logic'>('props');
   const [isAiSuggesting, setIsAiSuggesting] = useState(false);
+  const [scriptPrompt, setScriptPrompt] = useState('');
+  const [stylePrompt, setStylePrompt] = useState('');
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
 
   if (!selectedElement) {
     return (
@@ -151,13 +155,27 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
   const handleAiStyleSuggest = async () => {
       setIsAiSuggesting(true);
       try {
-          const styles = await getStyleSuggestions(selectedElement);
+          const styles = await getStyleSuggestions(selectedElement, stylePrompt);
           updateElement(selectedElement.id, { styles: { ...selectedElement.styles, ...styles } });
       } catch (error) {
           console.error("Failed to get AI styles", error);
           alert("Failed to get AI suggestions. Please try again.");
       } finally {
           setIsAiSuggesting(false);
+      }
+  }
+
+  const handleGenerateScript = async () => {
+      if (!scriptPrompt.trim()) return;
+      setIsGeneratingScript(true);
+      try {
+          const script = await getScriptSuggestions(scriptPrompt);
+          updateElement(selectedElement.id, { scriptContent: script });
+      } catch (error) {
+          console.error("Failed to generate script", error);
+          alert("Failed to generate script. Please try again.");
+      } finally {
+          setIsGeneratingScript(false);
       }
   }
 
@@ -187,10 +205,93 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
       <div className="p-4 overflow-y-auto custom-scrollbar flex-grow">
         {activeTab === 'props' && (
             <div className="space-y-4">
-                <PropertyInput label="Label Text" name="label" value={selectedElement.label} onChange={handleChange} />
+                {!['html-block', 'divider'].includes(selectedElement.type) && (
+                     <PropertyInput label="Label Text" name="label" value={selectedElement.label} onChange={handleChange} />
+                )}
                 
+                {selectedElement.type === 'html-block' && (
+                    <div className="mb-3">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Raw HTML Content</label>
+                        <div className="relative">
+                            <textarea
+                                value={selectedElement.htmlContent || ''}
+                                onChange={(e) => updateElement(selectedElement.id, { htmlContent: e.target.value })}
+                                rows={12}
+                                className="w-full p-2 text-sm font-mono border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary bg-gray-50"
+                                placeholder="<div><p>Your HTML here</p></div>"
+                            />
+                        </div>
+                         <p className="text-xs text-gray-400 mt-1">
+                            Enter standard HTML. Styling can be inline or via style tag.
+                        </p>
+                    </div>
+                )}
+
+                {selectedElement.type === 'typography' && (
+                    <>
+                        <PropertySelect
+                            label="Heading Level / Type"
+                            name="headingLevel"
+                            value={selectedElement.headingLevel || 'p'}
+                            onChange={handleChange}
+                            options={[
+                                { value: 'h1', label: 'Heading 1 (H1)' },
+                                { value: 'h2', label: 'Heading 2 (H2)' },
+                                { value: 'h3', label: 'Heading 3 (H3)' },
+                                { value: 'h4', label: 'Heading 4 (H4)' },
+                                { value: 'h5', label: 'Heading 5 (H5)' },
+                                { value: 'h6', label: 'Heading 6 (H6)' },
+                                { value: 'p', label: 'Paragraph (P)' },
+                                { value: 'span', label: 'Span (Inline)' },
+                            ]}
+                        />
+                        <PropertyTextarea 
+                            label="Text Content" 
+                            value={selectedElement.textContent || ''} 
+                            onChange={(e) => updateElement(selectedElement.id, { textContent: e.target.value })} 
+                            placeholder="Enter text..."
+                        />
+                    </>
+                )}
+
+                {selectedElement.type === 'image' && (
+                     <>
+                        <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Image URL</label>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text"
+                                    name="src"
+                                    value={selectedElement.src || ''} 
+                                    onChange={handleChange}
+                                    placeholder="https://example.com/image.jpg"
+                                    className="flex-1 p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
+                                />
+                            </div>
+                        </div>
+                        <PropertyInput label="Alt Text" name="altText" value={selectedElement.altText || ''} onChange={handleChange} />
+                     </>
+                )}
+
                 {selectedElement.type === 'script' && (
                     <div className="mb-3">
+                         <div className="bg-blue-50 p-3 rounded-md mb-3 border border-blue-100">
+                             <label className="block text-xs font-bold text-blue-800 mb-1">AI Script Generator</label>
+                             <textarea 
+                                value={scriptPrompt}
+                                onChange={(e) => setScriptPrompt(e.target.value)}
+                                placeholder="Describe what you want the script to do (e.g., 'Calculate sum of Field A and Field B and show in Field C')"
+                                className="w-full p-2 text-xs border border-blue-200 rounded mb-2 h-16"
+                             />
+                             <button 
+                                onClick={handleGenerateScript} 
+                                disabled={isGeneratingScript || !scriptPrompt}
+                                className="w-full py-1 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-50"
+                             >
+                                {isGeneratingScript ? 'Generating...' : 'Generate Script Code'}
+                             </button>
+                         </div>
+
                         <label className="block text-xs font-medium text-gray-500 mb-1">JavaScript Code</label>
                         <div className="relative">
                             <textarea
@@ -207,7 +308,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                     </div>
                 )}
 
-                {selectedElement.type !== 'script' && <PropertyInput label="Name Attribute" name="name" value={selectedElement.name} onChange={handleChange} placeholder="e.g., firstName" />}
+                {!['script', 'html-block', 'typography', 'divider', 'image'].includes(selectedElement.type) && <PropertyInput label="Name Attribute" name="name" value={selectedElement.name} onChange={handleChange} placeholder="e.g., firstName" />}
                 
                 {selectedElement.type === 'news-card' && (
                     <>
@@ -281,7 +382,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                         />
                 )}
 
-                {!['color', 'range', 'iframe', 'table', 'navbar', 'news-card', 'script'].includes(selectedElement.type) &&(
+                {!['color', 'range', 'iframe', 'table', 'navbar', 'news-card', 'script', 'html-block', 'typography', 'divider', 'image', 'accordion', 'reset-button'].includes(selectedElement.type) &&(
                     <div className="pt-4 border-t border-gray-200">
                         <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Validation</h3>
                         <div className="flex items-center my-2">
@@ -349,28 +450,37 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
 
         {activeTab === 'style' && (
             <div className="space-y-4">
-                <button 
-                    onClick={handleAiStyleSuggest}
-                    disabled={isAiSuggesting}
-                    className="w-full mb-4 flex items-center justify-center px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-semibold rounded-md shadow hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-70 disabled:cursor-wait"
-                >
-                     {isAiSuggesting ? (
-                         <>
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Magic Style
-                         </>
-                     ) : (
-                         <>
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" />
-                            </svg>
-                            Magic Style
-                         </>
-                     )}
-                </button>
+                 <div className="bg-indigo-50 p-3 rounded-md mb-4 border border-indigo-100">
+                    <label className="block text-xs font-bold text-indigo-800 mb-1">AI Style Assistant</label>
+                    <textarea
+                        value={stylePrompt}
+                        onChange={(e) => setStylePrompt(e.target.value)}
+                        placeholder="Describe the look (e.g., 'Modern purple button with shadow', 'Minimalist text input')"
+                        className="w-full p-2 text-xs border border-indigo-200 rounded mb-2 h-14 bg-white"
+                    />
+                    <button 
+                        onClick={handleAiStyleSuggest}
+                        disabled={isAiSuggesting}
+                        className="w-full flex items-center justify-center px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-semibold rounded-md shadow hover:from-indigo-600 hover:to-purple-700 transition-all disabled:opacity-70 disabled:cursor-wait"
+                    >
+                        {isAiSuggesting ? (
+                            <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Applying Magic Style...
+                            </>
+                        ) : (
+                            <>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" />
+                                </svg>
+                                Apply Magic Style
+                            </>
+                        )}
+                    </button>
+                </div>
                 
                 <CollapsibleSection title="Typography" defaultOpen={true}>
                     <PropertySelect
@@ -394,11 +504,38 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                             { value: 'bold', label: 'Bold' },
                         ]}
                     />
+                    <PropertySelect
+                        label="Text Align"
+                        name="textAlign"
+                        value={styles.textAlign || 'left'}
+                        onChange={(e) => handleStyleChange('textAlign', e.target.value)}
+                        options={[
+                            { value: 'left', label: 'Left' },
+                            { value: 'center', label: 'Center' },
+                            { value: 'right', label: 'Right' },
+                            { value: 'justify', label: 'Justify' },
+                        ]}
+                    />
+                    <PropertyInput label="Letter Spacing" name="letterSpacing" value={styles.letterSpacing || ''} onChange={(e) => handleStyleChange('letterSpacing', e.target.value)} placeholder="normal, 1px, 0.1em" />
+                    <PropertyInput label="Line Height" name="lineHeight" value={styles.lineHeight || ''} onChange={(e) => handleStyleChange('lineHeight', e.target.value)} placeholder="normal, 1.5, 24px" />
+                     <PropertySelect
+                        label="Text Decoration"
+                        name="textDecoration"
+                        value={styles.textDecoration || 'none'}
+                        onChange={(e) => handleStyleChange('textDecoration', e.target.value)}
+                        options={[
+                            { value: 'none', label: 'None' },
+                            { value: 'underline', label: 'Underline' },
+                            { value: 'line-through', label: 'Line Through' },
+                            { value: 'overline', label: 'Overline' },
+                        ]}
+                    />
                     <ColorPicker label="Text Color" value={styles.textColor || ''} onChange={(val) => handleStyleChange('textColor', val)} />
                 </CollapsibleSection>
                 
                 <CollapsibleSection title="Appearance" defaultOpen={true}>
                      <ColorPicker label="Background Color" value={styles.backgroundColor || ''} onChange={(val) => handleStyleChange('backgroundColor', val)} />
+                     <PropertyInput label="Box Shadow" name="boxShadow" value={styles.boxShadow || ''} onChange={(e) => handleStyleChange('boxShadow', e.target.value)} placeholder="0 4px 6px rgba(0,0,0,0.1)" />
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Border">
@@ -408,6 +545,73 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                         <PropertyInput label="Border Radius" name="borderRadius" value={styles.borderRadius || ''} onChange={(e) => handleStyleChange('borderRadius', e.target.value)} placeholder="4px" />
                     </div>
                 </CollapsibleSection>
+
+                {selectedElement.type === 'container' && (
+                    <CollapsibleSection title="Flexbox Layout" defaultOpen={true}>
+                         <PropertySelect
+                            label="Display"
+                            name="display"
+                            value={styles.display || 'block'}
+                            onChange={(e) => handleStyleChange('display', e.target.value)}
+                            options={[
+                                { value: 'block', label: 'Block' },
+                                { value: 'flex', label: 'Flex' },
+                            ]}
+                        />
+                        {styles.display === 'flex' && (
+                            <>
+                                <PropertySelect
+                                    label="Direction"
+                                    name="flexDirection"
+                                    value={styles.flexDirection || 'row'}
+                                    onChange={(e) => handleStyleChange('flexDirection', e.target.value)}
+                                    options={[
+                                        { value: 'row', label: 'Row (Horizontal)' },
+                                        { value: 'column', label: 'Column (Vertical)' },
+                                        { value: 'row-reverse', label: 'Row Reverse' },
+                                        { value: 'column-reverse', label: 'Column Reverse' },
+                                    ]}
+                                />
+                                <PropertySelect
+                                    label="Justify Content"
+                                    name="justifyContent"
+                                    value={styles.justifyContent || 'flex-start'}
+                                    onChange={(e) => handleStyleChange('justifyContent', e.target.value)}
+                                    options={[
+                                        { value: 'flex-start', label: 'Start' },
+                                        { value: 'center', label: 'Center' },
+                                        { value: 'flex-end', label: 'End' },
+                                        { value: 'space-between', label: 'Space Between' },
+                                        { value: 'space-around', label: 'Space Around' },
+                                    ]}
+                                />
+                                <PropertySelect
+                                    label="Align Items"
+                                    name="alignItems"
+                                    value={styles.alignItems || 'stretch'}
+                                    onChange={(e) => handleStyleChange('alignItems', e.target.value)}
+                                    options={[
+                                        { value: 'stretch', label: 'Stretch' },
+                                        { value: 'flex-start', label: 'Start' },
+                                        { value: 'center', label: 'Center' },
+                                        { value: 'flex-end', label: 'End' },
+                                    ]}
+                                />
+                                <PropertyInput label="Gap" name="gap" value={styles.gap || ''} onChange={(e) => handleStyleChange('gap', e.target.value)} placeholder="e.g. 1rem" />
+                                <PropertySelect
+                                    label="Wrap"
+                                    name="flexWrap"
+                                    value={styles.flexWrap || 'nowrap'}
+                                    onChange={(e) => handleStyleChange('flexWrap', e.target.value)}
+                                    options={[
+                                        { value: 'nowrap', label: 'No Wrap' },
+                                        { value: 'wrap', label: 'Wrap' },
+                                    ]}
+                                />
+                            </>
+                        )}
+                    </CollapsibleSection>
+                )}
 
                 <CollapsibleSection title="Layout">
                     <PropertySelect
@@ -422,8 +626,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                         ]}
                     />
                     <PropertyInput label="Padding" name="padding" value={styles.padding || ''} onChange={(e) => handleStyleChange('padding', e.target.value)} placeholder="10px" />
-                    {selectedElement.type === 'iframe' && (
-                        <PropertyInput label="Height" name="height" value={styles.height || '300px'} onChange={(e) => handleStyleChange('height', e.target.value)} placeholder="e.g., 500px" />
+                    {(selectedElement.type === 'iframe' || selectedElement.type === 'image') && (
+                         <div className="grid grid-cols-2 gap-2">
+                            <PropertyInput label="Width" name="width" value={styles.width || ''} onChange={(e) => handleStyleChange('width', e.target.value)} placeholder="e.g., 100%, 300px" />
+                            <PropertyInput label="Height" name="height" value={styles.height || ''} onChange={(e) => handleStyleChange('height', e.target.value)} placeholder="e.g., 200px" />
+                        </div>
                     )}
                 </CollapsibleSection>
             </div>
