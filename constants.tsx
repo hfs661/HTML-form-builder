@@ -213,6 +213,42 @@ export const STANDARD_ELEMENTS: PaletteItem[] = [
   }
 ];
 
+export const SCRIPT_SNIPPETS: SnippetItem[] = [
+    {
+        label: 'Current Date',
+        elements: [
+            { type: 'script', label: 'Set Date', scriptContent: `
+const dateInput = document.querySelector('input[type="date"]');
+if (dateInput) {
+  dateInput.valueAsDate = new Date();
+}
+` }
+        ]
+    },
+    {
+        label: 'Alert on Click',
+        elements: [
+            { type: 'script', label: 'Alert Script', scriptContent: `
+const btn = document.querySelector('button');
+if (btn) {
+  btn.addEventListener('click', () => alert('Button Clicked!'));
+}
+` }
+        ]
+    },
+     {
+        label: 'Console Log Input',
+        elements: [
+            { type: 'script', label: 'Log Input', scriptContent: `
+const inputs = document.querySelectorAll('input');
+inputs.forEach(input => {
+  input.addEventListener('change', (e) => console.log(e.target.name, e.target.value));
+});
+` }
+        ]
+    }
+];
+
 export const SNIPPETS: SnippetItem[] = [
     {
         label: 'Login Form',

@@ -15,8 +15,8 @@ const responseSchema = {
       properties: {
         type: {
           type: Type.STRING,
-          description: "Type of the form field. Must be one of: 'text', 'textarea', 'checkbox', 'radio', 'select', 'button'.",
-          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button'],
+          description: "Type of the form field. Must be one of: 'text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar'.",
+          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar'],
         },
         label: {
           type: Type.STRING,
@@ -62,12 +62,23 @@ const styleResponseSchema = {
         letterSpacing: { type: Type.STRING },
         lineHeight: { type: Type.STRING },
         textDecoration: { type: Type.STRING, enum: ['none', 'underline', 'line-through', 'overline'] },
-        boxShadow: { type: Type.STRING }
+        boxShadow: { type: Type.STRING },
+        display: { type: Type.STRING },
+        flexDirection: { type: Type.STRING },
+        justifyContent: { type: Type.STRING },
+        alignItems: { type: Type.STRING },
+        gap: { type: Type.STRING },
+        gridTemplateColumns: { type: Type.STRING },
+        gridTemplateRows: { type: Type.STRING },
+        focusBorderColor: { type: Type.STRING },
+        focusBoxShadow: { type: Type.STRING }
     },
     required: [],
     propertyOrdering: [
         "backgroundColor", "textColor", "borderColor", "borderWidth", "borderRadius", "padding", 
-        "fontFamily", "fontWeight", "textAlign", "letterSpacing", "lineHeight", "textDecoration", "boxShadow"
+        "fontFamily", "fontWeight", "textAlign", "letterSpacing", "lineHeight", "textDecoration", "boxShadow",
+        "display", "flexDirection", "justifyContent", "alignItems", "gap", "gridTemplateColumns", "gridTemplateRows",
+        "focusBorderColor", "focusBoxShadow"
     ]
 };
 
@@ -146,6 +157,51 @@ export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolea
     }
 };
 
+export const analyzeFormContext = async (elements: FormElement[]) => {
+    if (!process.env.API_KEY) {
+        throw new Error("API key is not configured.");
+    }
+    
+    // Create a simplified representation of the tree for the AI
+    const simplify = (list: FormElement[]): any[] => list.map(el => ({
+        type: el.type,
+        label: el.label,
+        name: el.name,
+        children: el.children ? simplify(el.children) : undefined
+    }));
+    
+    const structure = JSON.stringify(simplify(elements));
+    
+    try {
+        const fullPrompt = `Analyze the following HTML form structure and context:
+        ${structure}
+        
+        Identify missing standard fields, logical gaps, or UX improvements.
+        Generate a JSON list of NEW form elements that should be added to improve this form or complete it.
+        For example, if 'Shipping Address' exists, suggest 'Billing Address' fields.
+        
+        The 'type' property of suggested elements must be one of: 'text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar'.
+        `;
+        
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: fullPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema,
+                temperature: 0.3,
+            },
+        });
+
+        const jsonText = response.text.trim();
+        const suggestions = JSON.parse(jsonText);
+        return suggestions;
+    } catch (error) {
+         console.error("Error analyzing form context:", error);
+         throw error;
+    }
+};
+
 export const getStyleSuggestions = async (element: FormElement, stylePrompt?: string): Promise<ElementStyle> => {
     if (!process.env.API_KEY) {
         throw new Error("API key is not configured.");
@@ -157,7 +213,8 @@ export const getStyleSuggestions = async (element: FormElement, stylePrompt?: st
         Name: ${element.name}`;
 
         if (stylePrompt) {
-            fullPrompt += `\n\nUser Style Request: "${stylePrompt}"\nPlease ensure the generated styles strictly match this request.`;
+            fullPrompt += `\n\nUser Style Request: "${stylePrompt}"\nPlease ensure the generated styles strictly match this request. 
+            If the user asks for focus states, provide values for 'focusBorderColor' and 'focusBoxShadow'.`;
         } else {
              fullPrompt += `\n\nProvide a JSON object with style properties that make this element look professional and modern.`;
         }

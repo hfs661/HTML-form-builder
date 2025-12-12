@@ -1,7 +1,7 @@
 
 import React from 'react';
 import type { PaletteItem, FormElement, SnippetItem } from '../types';
-import { STANDARD_ELEMENTS, SNIPPETS } from '../constants';
+import { STANDARD_ELEMENTS, SNIPPETS, SCRIPT_SNIPPETS } from '../constants';
 
 interface PaletteProps {
   suggestedElements: Partial<FormElement>[];
@@ -51,9 +51,14 @@ const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions
         <DraggableItem key={item.type} item={{...item, name: item.type}} type="element" />
       ))}
 
-      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 mt-6">Snippets</h3>
+      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 mt-6">Layout & Forms</h3>
       {SNIPPETS.map((snippet: SnippetItem, index) => (
           <DraggableItem key={`snippet-${index}`} item={snippet} type="snippet" />
+      ))}
+      
+      <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 mt-6">Scripts</h3>
+      {SCRIPT_SNIPPETS.map((snippet: SnippetItem, index) => (
+          <DraggableItem key={`script-snippet-${index}`} item={snippet} type="snippet" />
       ))}
       
       {suggestedElements.length > 0 && (

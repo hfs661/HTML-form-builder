@@ -22,12 +22,18 @@ export interface ElementStyle {
   textDecoration?: 'none' | 'underline' | 'line-through' | 'overline';
   boxShadow?: string;
   // Flexbox properties for Container
-  display?: 'block' | 'flex';
+  display?: 'block' | 'flex' | 'grid';
   flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
   justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around';
   alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
   gap?: string;
   flexWrap?: 'nowrap' | 'wrap';
+  // Grid properties
+  gridTemplateColumns?: string;
+  gridTemplateRows?: string;
+  // Focus State
+  focusBorderColor?: string;
+  focusBoxShadow?: string;
 }
 
 export interface ElementLogic {
@@ -51,12 +57,13 @@ export interface FormElement {
   subType?: 'text' | 'email' | 'password' | 'tel' | 'url';
   minLength?: number;
   maxLength?: number;
-  min?: number;
-  max?: number;
+  min?: number | string;
+  max?: number | string;
   step?: number;
   pattern?: string;
   accept?: string;
   customErrorMessage?: string;
+  inputMask?: string; // e.g. (999) 999-9999
   // Styling
   styles?: ElementStyle;
   // Logic

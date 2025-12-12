@@ -7,7 +7,7 @@ import CodeModal from './components/CodeModal';
 import PreviewModal from './components/PreviewModal';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import type { FormElement } from './types';
-import { getFormSuggestions } from './services/geminiService';
+import { getFormSuggestions, analyzeFormContext } from './services/geminiService';
 
 const App: React.FC = () => {
   const [formElements, setFormElements] = useState<FormElement[]>(() => {
@@ -98,7 +98,44 @@ const App: React.FC = () => {
         setSelectedElement(current => current?.id === id ? { ...current, ...updatedProps } : current);
         return updated;
     });
-  }, [history, historyIndex]); // Depend on history state to ensure correct closure
+  }, [history, historyIndex]); 
+
+  // Helper to deep clone element with new IDs
+  const deepCloneWithNewIds = (element: FormElement): FormElement => {
+      const newId = `${element.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newChildren = element.children ? element.children.map(deepCloneWithNewIds) : undefined;
+      return {
+          ...element,
+          id: newId,
+          name: `${element.name}_copy`, // Basic rename to avoid duplicates
+          children: newChildren
+      };
+  };
+
+  const duplicateElement = useCallback((id: string) => {
+      updateFormElementsWithHistory(prev => {
+          // Recursive finder and inserter
+          const insertAfter = (list: FormElement[]): FormElement[] => {
+              const idx = list.findIndex(el => el.id === id);
+              if (idx !== -1) {
+                  const original = list[idx];
+                  const copy = deepCloneWithNewIds(original);
+                  const newList = [...list];
+                  newList.splice(idx + 1, 0, copy);
+                  return newList;
+              }
+              // If not found in this level, map children
+              return list.map(el => {
+                  if (el.children) {
+                      return { ...el, children: insertAfter(el.children) };
+                  }
+                  return el;
+              });
+          };
+          return insertAfter(prev);
+      });
+  }, [history, historyIndex]);
+
 
   const generateHTML = (elements: FormElement[]) => {
       const lines: string[] = [];
@@ -138,6 +175,13 @@ const App: React.FC = () => {
               if(s.lineHeight) styles.push(`line-height: ${s.lineHeight}`);
               if(s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
               if(s.boxShadow) styles.push(`box-shadow: ${s.boxShadow}`);
+              // Grid props
+              if(s.display === 'grid') {
+                  styles.push('display: grid');
+                  if(s.gridTemplateColumns) styles.push(`grid-template-columns: ${s.gridTemplateColumns}`);
+                  if(s.gridTemplateRows) styles.push(`grid-template-rows: ${s.gridTemplateRows}`);
+                  if(s.gap) styles.push(`gap: ${s.gap}`);
+              }
               return styles.length > 0 ? `style="${styles.join('; ')}"` : '';
           };
           const styleStr = getStyleString(el.styles);
@@ -153,13 +197,15 @@ const App: React.FC = () => {
                   if(s.alignItems) layoutStyles.push(`align-items: ${s.alignItems}`);
                   if(s.gap) layoutStyles.push(`gap: ${s.gap}`);
                   if(s.flexWrap) layoutStyles.push(`flex-wrap: ${s.flexWrap}`);
-              } else {
-                   // Default stack spacing if no flex
-                   // Actually we'll just omit specific layout styles and rely on block flow
+              } else if (s.display === 'grid') {
+                  layoutStyles.push('display: grid');
+                  if(s.gridTemplateColumns) layoutStyles.push(`grid-template-columns: ${s.gridTemplateColumns}`);
+                  if(s.gridTemplateRows) layoutStyles.push(`grid-template-rows: ${s.gridTemplateRows}`);
+                  if(s.gap) layoutStyles.push(`gap: ${s.gap}`);
               }
               
               const layoutStyleStr = layoutStyles.length > 0 ? `style="${layoutStyles.join('; ')}"` : '';
-              const wrapperClass = s.display === 'flex' ? '' : 'space-y-2';
+              const wrapperClass = (!s.display || s.display === 'block') ? 'space-y-2' : '';
 
               lines.push(`  <div class="container-wrapper" ${styleStr}>`);
               lines.push(`    <div class="container-content ${wrapperClass}" ${layoutStyleStr}>`);
@@ -288,6 +334,20 @@ const App: React.FC = () => {
         setIsLoading(false);
     }
   };
+  
+  const handleSmartSuggestions = async () => {
+      setIsLoading(true);
+      setError(null);
+      setSuggestedElements([]);
+      try {
+          const suggestions = await analyzeFormContext(formElements);
+          setSuggestedElements(suggestions);
+      } catch(err) {
+           setError(err instanceof Error ? err.message : 'Failed to analyze form.');
+      } finally {
+          setIsLoading(false);
+      }
+  };
 
   const handleClearAll = () => {
     updateFormElementsWithHistory([]);
@@ -377,9 +437,23 @@ const App: React.FC = () => {
                         >
                             {isLoading ? 'Thinking...' : 'Get Suggestions'}
                         </button>
+                         <button
+                            onClick={handleSmartSuggestions}
+                            disabled={isLoading}
+                            className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center whitespace-nowrap"
+                            title="Analyze current form and suggest missing fields"
+                        >
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                            </svg>
+                            Analyze Form
+                        </button>
+                    </div>
+                </div>
+                 <div className="flex items-center justify-end mt-2">
                         <div 
                             title="Use Google Search for more relevant and up-to-date suggestions"
-                            className="flex items-center p-2 rounded-md bg-white border border-gray-300 shadow-sm whitespace-nowrap"
+                            className="flex items-center p-1 rounded-md bg-transparent"
                         >
                             <input
                                 type="checkbox"
@@ -388,12 +462,12 @@ const App: React.FC = () => {
                                 onChange={(e) => setUseGoogleSearch(e.target.checked)}
                                 className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
                             />
-                            <label htmlFor="useGoogleSearch" className="ml-2 text-sm text-gray-700 font-medium select-none cursor-pointer">
-                                Use Google Search
+                            <label htmlFor="useGoogleSearch" className="ml-2 text-sm text-gray-700 select-none cursor-pointer">
+                                Use Google Search for Suggestions
                             </label>
                         </div>
-                    </div>
                 </div>
+
                 {error && <p className="text-red-500 text-center mt-2">{error}</p>}
                 {searchSources && searchSources.length > 0 && (
                     <div className="mt-4 text-sm p-3 bg-blue-50 border border-blue-200 rounded-md">
@@ -425,6 +499,7 @@ const App: React.FC = () => {
             updateElement={updateElement} 
             closePanel={() => setSelectedElement(null)} 
             allElements={formElements}
+            onDuplicate={duplicateElement}
         />
       </main>
 
