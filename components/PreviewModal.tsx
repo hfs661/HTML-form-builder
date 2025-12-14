@@ -11,9 +11,11 @@ interface PreviewModalProps {
 const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [visibleElements, setVisibleElements] = useState<string[]>([]);
+  const [requiredElements, setRequiredElements] = useState<Record<string, boolean>>({});
 
   // Initialize logic on mount and when form data changes
   useEffect(() => {
+      // 1. Calculate Visibility
       const newVisibleElements = elements.map(el => {
           if (!el.logic || !el.logic.triggerId) return el.id;
 
@@ -40,6 +42,41 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
       }).filter((id): id is string => id !== null);
 
       setVisibleElements(newVisibleElements);
+
+      // 2. Calculate Conditional Validation
+      const newRequiredElements: Record<string, boolean> = {};
+      elements.forEach(el => {
+          // Default to static requirement
+          let isReq = !!el.required;
+
+          if (el.validationLogic && el.validationLogic.triggerId) {
+              const triggerEl = elements.find(e => e.id === el.validationLogic!.triggerId);
+              if (triggerEl) {
+                  const triggerValue = formData[triggerEl.name]?.toString() || '';
+                  const conditionValue = el.validationLogic.value;
+                  let matches = false;
+
+                  if (el.validationLogic.condition === 'equals') {
+                      matches = triggerValue === conditionValue;
+                  } else if (el.validationLogic.condition === 'not_equals') {
+                      matches = triggerValue !== conditionValue;
+                  } else if (el.validationLogic.condition === 'contains') {
+                      matches = triggerValue.includes(conditionValue);
+                  }
+                  
+                  // If matches, it becomes required. If not, it falls back to static setting (usually false if using conditional)
+                  if (matches) {
+                      isReq = true;
+                  } else {
+                      // If condition not met, revert to base state (often false for conditional logic fields)
+                      isReq = el.required || false;
+                  }
+              }
+          }
+          newRequiredElements[el.id] = isReq;
+      });
+      setRequiredElements(newRequiredElements);
+
   }, [formData, elements]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -66,6 +103,26 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
     alert(JSON.stringify(visibleData, null, 2));
     console.log("Form Submission Data:", visibleData);
   };
+  
+  // Recursive renderer for preview to handle layouts properly
+  const renderPreviewElements = (list: FormElement[]) => {
+      return list.map(el => {
+          // Logic check for visibility
+          if (!visibleElements.includes(el.id)) return null;
+          
+          return (
+             <FormElementRenderer 
+                key={el.id}
+                element={el} 
+                preview={true} 
+                hidden={false}
+                forceRequired={requiredElements[el.id]}
+            >
+                {el.children && renderPreviewElements(el.children)}
+            </FormElementRenderer>
+          );
+      });
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -84,15 +141,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                 {elements.length === 0 ? (
                     <p className="text-center text-gray-500">No elements to preview.</p>
                 ) : (
-                    elements.map((el) => (
-                        <div key={el.id} className={visibleElements.includes(el.id) ? 'mb-4' : 'hidden'}>
-                            <FormElementRenderer 
-                                element={el} 
-                                preview={true} 
-                                hidden={!visibleElements.includes(el.id)}
-                            />
-                        </div>
-                    ))
+                    renderPreviewElements(elements)
                 )}
                 
                 {elements.length > 0 && !elements.some(el => el.type === 'button') && (

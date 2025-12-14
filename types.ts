@@ -21,16 +21,23 @@ export interface ElementStyle {
   lineHeight?: string;
   textDecoration?: 'none' | 'underline' | 'line-through' | 'overline';
   boxShadow?: string;
-  // Flexbox properties for Container
+  // Flexbox/Grid Container properties
   display?: 'block' | 'flex' | 'grid';
   flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
   justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around';
   alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
   gap?: string;
   flexWrap?: 'nowrap' | 'wrap';
-  // Grid properties
+  // Grid Container properties
   gridTemplateColumns?: string;
   gridTemplateRows?: string;
+  // Item properties (Flex/Grid children)
+  gridColumn?: string; // e.g. "span 6"
+  gridRow?: string;
+  flexGrow?: string;
+  flexShrink?: string;
+  flexBasis?: string;
+  alignSelf?: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'baseline' | 'stretch';
   // Focus State
   focusBorderColor?: string;
   focusBoxShadow?: string;
@@ -41,6 +48,12 @@ export interface ElementLogic {
   action: 'show' | 'hide';
   condition: 'equals' | 'not_equals' | 'contains';
   value: string;
+}
+
+export interface ValidationLogic {
+    triggerId: string;
+    condition: 'equals' | 'not_equals' | 'contains';
+    value: string;
 }
 
 export interface FormElement {
@@ -64,6 +77,8 @@ export interface FormElement {
   accept?: string;
   customErrorMessage?: string;
   inputMask?: string; // e.g. (999) 999-9999
+  // Conditional Validation
+  validationLogic?: ValidationLogic;
   // Styling
   styles?: ElementStyle;
   // Logic
@@ -90,6 +105,10 @@ export interface FormElement {
   altText?: string;
 }
 
+export interface SnippetFormElement extends Partial<Omit<FormElement, 'children'>> {
+  children?: SnippetFormElement[];
+}
+
 export interface PaletteItem {
   type: FormElementType;
   label: string;
@@ -98,5 +117,5 @@ export interface PaletteItem {
 
 export interface SnippetItem {
   label: string;
-  elements: Partial<FormElement>[];
+  elements: SnippetFormElement[];
 }

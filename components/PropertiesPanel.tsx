@@ -102,6 +102,23 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
   const [stylePrompt, setStylePrompt] = useState('');
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
 
+  // Parent Lookup
+  const parentElement = useMemo(() => {
+    const findParent = (list: FormElement[]): FormElement | null => {
+        for (const el of list) {
+            if (el.children?.some(c => c.id === selectedElement?.id)) {
+                return el;
+            }
+            if (el.children) {
+                const found = findParent(el.children);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+    return selectedElement ? findParent(allElements) : null;
+  }, [selectedElement, allElements]);
+
   // Accessibility Checker Logic
   const accessibilityIssues = useMemo(() => {
     if (!selectedElement) return [];
@@ -172,6 +189,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
       });
   };
 
+  const handleValidationLogicChange = (name: string, value: string) => {
+    const currentValLogic = selectedElement.validationLogic || { triggerId: '', condition: 'equals', value: '' };
+    updateElement(selectedElement.id, {
+        validationLogic: { ...currentValLogic, [name]: value }
+    });
+  };
+
   const handleAiStyleSuggest = async (usePrompt: boolean = true) => {
       setIsAiSuggesting(true);
       try {
@@ -220,11 +244,23 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
       }
   }
 
+  // Grid Presets Helper
+  const applyGridPreset = (preset: '12-col' | '4-col' | '3-col' | '2-col') => {
+      let val = 'repeat(1, 1fr)';
+      if (preset === '12-col') val = 'repeat(12, 1fr)';
+      if (preset === '4-col') val = 'repeat(4, 1fr)';
+      if (preset === '3-col') val = 'repeat(3, 1fr)';
+      if (preset === '2-col') val = 'repeat(2, 1fr)';
+      handleStyleChange('gridTemplateColumns', val);
+      if(!selectedElement.styles?.gap) handleStyleChange('gap', '1rem');
+  };
+
 
   const linksString = (selectedElement.links || []).map(l => `${l.label}|${l.url}`).join('\n');
   const headersString = (selectedElement.headers || []).join(', ');
   const styles = selectedElement.styles || {};
   const logic = selectedElement.logic || { triggerId: '', action: 'show', condition: 'equals', value: '' };
+  const valLogic = selectedElement.validationLogic || { triggerId: '', condition: 'equals', value: '' };
 
   return (
     <div className="w-full md:w-72 lg:w-80 bg-brand-light-gray h-full flex flex-col border-l border-gray-300">
@@ -447,6 +483,30 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                 </div>
               </div>
           
+              {/* Parent Grid Item Settings */}
+              {parentElement && parentElement.styles?.display === 'grid' && (
+                  <CollapsibleSection title="Grid Item Position" defaultOpen>
+                      <div className="bg-blue-50 p-2 rounded mb-2 text-xs text-blue-700">
+                          Inside Grid Container ({parentElement.label})
+                      </div>
+                      <PropertyInput label="Column Span (e.g. span 6)" name="gridColumn" value={styles.gridColumn || ''} onChange={(e) => handleStyleChange('gridColumn', e.target.value)} placeholder="span 1" />
+                      
+                      <div className="flex flex-wrap gap-2 mb-2">
+                          {[1, 2, 3, 4, 6, 8, 12].map(span => (
+                              <button 
+                                key={span}
+                                onClick={() => handleStyleChange('gridColumn', `span ${span}`)}
+                                className="px-2 py-1 text-xs bg-white border border-blue-200 rounded hover:bg-blue-100 text-blue-800"
+                              >
+                                  Span {span}
+                              </button>
+                          ))}
+                      </div>
+
+                      <PropertyInput label="Row Span (e.g. span 2)" name="gridRow" value={styles.gridRow || ''} onChange={(e) => handleStyleChange('gridRow', e.target.value)} placeholder="span 1" />
+                  </CollapsibleSection>
+              )}
+
               <CollapsibleSection title="Dimensions & Spacing" defaultOpen>
                   <div className="grid grid-cols-2 gap-2">
                     <PropertyInput label="Width" name="width" value={styles.width || ''} onChange={(e) => handleStyleChange('width', e.target.value)} placeholder="e.g. 100%, 200px" />
@@ -500,7 +560,15 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                       )}
                       {styles.display === 'grid' && (
                           <>
-                            <PropertyInput label="Grid Columns" name="gridTemplateColumns" value={styles.gridTemplateColumns || ''} onChange={(e) => handleStyleChange('gridTemplateColumns', e.target.value)} placeholder="e.g. 1fr 1fr" />
+                            <div className="mb-3">
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Presets</label>
+                                <div className="flex flex-wrap gap-1">
+                                    <button onClick={() => applyGridPreset('12-col')} className="px-2 py-1 bg-gray-100 border text-xs rounded hover:bg-gray-200">12 Columns (Bootstrap)</button>
+                                    <button onClick={() => applyGridPreset('4-col')} className="px-2 py-1 bg-gray-100 border text-xs rounded hover:bg-gray-200">4 Columns</button>
+                                    <button onClick={() => applyGridPreset('3-col')} className="px-2 py-1 bg-gray-100 border text-xs rounded hover:bg-gray-200">3 Columns</button>
+                                </div>
+                            </div>
+                            <PropertyInput label="Grid Columns" name="gridTemplateColumns" value={styles.gridTemplateColumns || ''} onChange={(e) => handleStyleChange('gridTemplateColumns', e.target.value)} placeholder="e.g. repeat(12, 1fr)" />
                             <PropertyInput label="Grid Rows" name="gridTemplateRows" value={styles.gridTemplateRows || ''} onChange={(e) => handleStyleChange('gridTemplateRows', e.target.value)} placeholder="e.g. auto auto" />
                             <PropertyInput label="Grid Gap" name="gap" value={styles.gap || ''} onChange={(e) => handleStyleChange('gap', e.target.value)} placeholder="e.g. 1rem" />
                           </>
@@ -512,9 +580,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
 
         {activeTab === 'logic' && (
           <div className="space-y-4">
-              <p className="text-xs text-gray-500 mb-2">Configure when this element should be visible based on other field values.</p>
+              <p className="text-xs text-gray-500 mb-2">Configure dynamic behaviors for this element.</p>
               
-              <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+              <div className="bg-gray-50 p-3 rounded-md border border-gray-200 mb-4">
+                  <h4 className="text-sm font-bold text-gray-700 mb-2">Conditional Visibility</h4>
                   <PropertySelect 
                     label="Trigger Field" 
                     name="triggerId" 
@@ -579,6 +648,49 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, upda
                       </>
                   )}
               </div>
+
+              {/* Conditional Validation Section */}
+              <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+                  <h4 className="text-sm font-bold text-gray-700 mb-2">Conditional Validation</h4>
+                  <p className="text-xs text-gray-600 mb-2">Make this field <strong>Required</strong> only when:</p>
+                  
+                  <PropertySelect 
+                    label="Trigger Field" 
+                    name="triggerId" 
+                    value={valLogic.triggerId} 
+                    onChange={(e) => handleValidationLogicChange('triggerId', e.target.value)} 
+                    options={[
+                        { value: '', label: '-- Select Field --' },
+                        ...allElements
+                            .filter(el => el.id !== selectedElement.id && ['text', 'select', 'radio', 'checkbox', 'number'].includes(el.type))
+                            .map(el => ({ value: el.id, label: el.label || el.name }))
+                    ]} 
+                  />
+
+                  {valLogic.triggerId && (
+                      <>
+                        <PropertySelect 
+                            label="Condition" 
+                            name="condition" 
+                            value={valLogic.condition} 
+                            onChange={(e) => handleValidationLogicChange('condition', e.target.value)} 
+                            options={[
+                                { value: 'equals', label: 'Equals' },
+                                { value: 'not_equals', label: 'Not Equals' },
+                                { value: 'contains', label: 'Contains' },
+                            ]} 
+                        />
+                        <PropertyInput 
+                            label="Value to match" 
+                            name="value" 
+                            value={valLogic.value} 
+                            onChange={(e) => handleValidationLogicChange('value', e.target.value)} 
+                            placeholder="e.g. true, yes, 10"
+                        />
+                      </>
+                  )}
+              </div>
+
           </div>
         )}
       </div>

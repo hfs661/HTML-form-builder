@@ -85,7 +85,22 @@ const App: React.FC = () => {
   // Recursive update helper for deep updates
   const recursiveUpdateElement = (list: FormElement[], id: string, updatedProps: Partial<FormElement>): FormElement[] => {
       return list.map(el => {
-          if (el.id === id) return { ...el, ...updatedProps };
+          if (el.id === id) {
+              const newProps = { ...updatedProps };
+              // Deep merge styles if present
+              if (updatedProps.styles && el.styles) {
+                  newProps.styles = { ...el.styles, ...updatedProps.styles };
+              }
+              // Deep merge logic if present
+              if (updatedProps.logic && el.logic) {
+                  newProps.logic = { ...el.logic, ...updatedProps.logic };
+              }
+              // Deep merge validationLogic if present
+               if (updatedProps.validationLogic && el.validationLogic) {
+                  newProps.validationLogic = { ...el.validationLogic, ...updatedProps.validationLogic };
+              }
+              return { ...el, ...newProps };
+          }
           if (el.children) return { ...el, children: recursiveUpdateElement(el.children, id, updatedProps) };
           return el;
       });
@@ -94,11 +109,26 @@ const App: React.FC = () => {
   const updateElement = useCallback((id: string, updatedProps: Partial<FormElement>) => {
     updateFormElementsWithHistory((prev) => {
         const updated = recursiveUpdateElement(prev, id, updatedProps);
-        // Update selected element locally so props panel reflects changes immediately
-        setSelectedElement(current => current?.id === id ? { ...current, ...updatedProps } : current);
+        // Find the updated element to refresh selectedElement state properly
+        // We can't just merge updatedProps into selectedElement because selectedElement might be stale or updatedProps might be partial
+        // However, for UI responsiveness, we usually assume success.
+        // Better: Find the element in the updated tree.
+        const findElement = (list: FormElement[]): FormElement | undefined => {
+            for(const el of list) {
+                if(el.id === id) return el;
+                if(el.children) {
+                    const found = findElement(el.children);
+                    if(found) return found;
+                }
+            }
+        };
+        const newSelected = findElement(updated);
+        if (newSelected && selectedElement && selectedElement.id === id) {
+            setSelectedElement(newSelected);
+        }
         return updated;
     });
-  }, [history, historyIndex]); 
+  }, [history, historyIndex, selectedElement]); 
 
   // Helper to deep clone element with new IDs
   const deepCloneWithNewIds = (element: FormElement): FormElement => {
@@ -175,7 +205,16 @@ const App: React.FC = () => {
               if(s.lineHeight) styles.push(`line-height: ${s.lineHeight}`);
               if(s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
               if(s.boxShadow) styles.push(`box-shadow: ${s.boxShadow}`);
-              // Grid props
+              
+              // Grid/Flex Item props
+              if(s.gridColumn) styles.push(`grid-column: ${s.gridColumn}`);
+              if(s.gridRow) styles.push(`grid-row: ${s.gridRow}`);
+              if(s.flexGrow) styles.push(`flex-grow: ${s.flexGrow}`);
+              if(s.flexShrink) styles.push(`flex-shrink: ${s.flexShrink}`);
+              if(s.flexBasis) styles.push(`flex-basis: ${s.flexBasis}`);
+              if(s.alignSelf) styles.push(`align-self: ${s.alignSelf}`);
+
+              // Grid Container props
               if(s.display === 'grid') {
                   styles.push('display: grid');
                   if(s.gridTemplateColumns) styles.push(`grid-template-columns: ${s.gridTemplateColumns}`);
@@ -207,13 +246,13 @@ const App: React.FC = () => {
               const layoutStyleStr = layoutStyles.length > 0 ? `style="${layoutStyles.join('; ')}"` : '';
               const wrapperClass = (!s.display || s.display === 'block') ? 'space-y-2' : '';
 
-              lines.push(`  <div class="container-wrapper" ${styleStr}>`);
-              lines.push(`    <div class="container-content ${wrapperClass}" ${layoutStyleStr}>`);
-              // Recurse
+              // For HTML generation, we typically want the container to be the layout wrapper.
+              // In our recursive edit mode, we had wrappers. Here we flatten it a bit.
+              
+              lines.push(`  <div class="container-element ${wrapperClass}" ${styleStr} ${layoutStyleStr}>`);
               if (el.children) {
                   lines.push(generateHTML(el.children));
               }
-              lines.push('    </div>');
               lines.push('  </div>');
               return;
           }
@@ -247,7 +286,7 @@ const App: React.FC = () => {
           }
 
           // Start field wrapper
-          lines.push('  <div class="form-group">');
+          lines.push(`  <div class="form-group" ${styleStr}>`);
           
           // Label
           if (!['button', 'reset-button', 'news-card', 'iframe', 'navbar', 'container', 'html-block', 'typography', 'divider', 'image', 'accordion'].includes(el.type)) {
@@ -260,6 +299,8 @@ const App: React.FC = () => {
           const disabledAttr = el.disabled ? 'disabled' : '';
           const errorAttr = el.customErrorMessage ? `data-error-message="${el.customErrorMessage}"` : '';
           
+          // Inner style (stripping layout props for inner input if needed, but for simple HTML gen, reusing styleStr on wrapper is often safer for layout, and input gets width:100%)
+          const inputStyleStr = 'style="width: 100%"';
 
           switch (el.type) {
               case 'text':
@@ -268,29 +309,29 @@ const App: React.FC = () => {
               case 'color':
               case 'file':
               case 'range':
-                  fieldHtml = `    <input type="${el.subType || el.type}" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr} />`;
+                  fieldHtml = `    <input type="${el.subType || el.type}" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${inputStyleStr} />`;
                   break;
               case 'textarea':
-                  fieldHtml = `    <textarea id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" rows="4" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr}></textarea>`;
+                  fieldHtml = `    <textarea id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" rows="4" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${inputStyleStr}></textarea>`;
                   break;
               case 'select':
                   const optionsHtml = el.options?.map(opt => `<option value="${opt}">${opt}</option>`).join('') || '';
-                  fieldHtml = `    <select id="${el.name}" name="${el.name}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr}>${optionsHtml}</select>`;
+                  fieldHtml = `    <select id="${el.name}" name="${el.name}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${inputStyleStr}>${optionsHtml}</select>`;
                   break;
               case 'checkbox':
-                  fieldHtml = `    <div class="flex items-center"><input type="checkbox" id="${el.name}" name="${el.name}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${styleStr} /><label for="${el.name}">${el.label}</label></div>`;
+                  fieldHtml = `    <div class="flex items-center"><input type="checkbox" id="${el.name}" name="${el.name}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} /><label for="${el.name}">${el.label}</label></div>`;
                   break;
               case 'radio':
                   fieldHtml = el.options?.map(opt => `    <div class="flex items-center"><input type="radio" name="${el.name}" value="${opt}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} /><label>${opt}</label></div>`).join('\n') || '';
                   break;
               case 'button':
-                  fieldHtml = `    <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-md" ${disabledAttr} ${styleStr}>${el.label}</button>`;
+                  fieldHtml = `    <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-md" ${disabledAttr}>${el.label}</button>`;
                   break;
               case 'reset-button':
-                  fieldHtml = `    <button type="reset" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md" ${disabledAttr} ${styleStr}>${el.label}</button>`;
+                  fieldHtml = `    <button type="reset" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md" ${disabledAttr}>${el.label}</button>`;
                   break;
               case 'iframe':
-                  fieldHtml = `    <iframe src="${el.src || 'about:blank'}" title="${el.label}" class="w-full border" ${styleStr}></iframe>`;
+                  fieldHtml = `    <iframe src="${el.src || 'about:blank'}" title="${el.label}" class="w-full border" style="height: 300px"></iframe>`;
                   break;
               default:
                   fieldHtml = `    <!-- Element type ${el.type} generation not fully supported yet -->`;

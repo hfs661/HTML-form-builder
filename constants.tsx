@@ -215,7 +215,7 @@ export const STANDARD_ELEMENTS: PaletteItem[] = [
 
 export const SCRIPT_SNIPPETS: SnippetItem[] = [
     {
-        label: 'Current Date',
+        label: 'Current Date Init',
         elements: [
             { type: 'script', label: 'Set Date', scriptContent: `
 const dateInput = document.querySelector('input[type="date"]');
@@ -226,7 +226,7 @@ if (dateInput) {
         ]
     },
     {
-        label: 'Alert on Click',
+        label: 'Button Alert',
         elements: [
             { type: 'script', label: 'Alert Script', scriptContent: `
 const btn = document.querySelector('button');
@@ -237,7 +237,7 @@ if (btn) {
         ]
     },
      {
-        label: 'Console Log Input',
+        label: 'Log Input Changes',
         elements: [
             { type: 'script', label: 'Log Input', scriptContent: `
 const inputs = document.querySelectorAll('input');
@@ -246,6 +246,173 @@ inputs.forEach(input => {
 });
 ` }
         ]
+    },
+    {
+        label: 'Auto-Save (Local)',
+        elements: [{
+            type: 'script',
+            label: 'AutoSave Script',
+            scriptContent: `
+// Saves all input values to localStorage
+const formId = 'myForm'; 
+const inputs = document.querySelectorAll('input, textarea, select');
+
+// Load saved values
+inputs.forEach(input => {
+    const saved = localStorage.getItem(formId + '_' + input.name);
+    if (saved) input.value = saved;
+    
+    // Save on change
+    input.addEventListener('input', e => {
+        localStorage.setItem(formId + '_' + e.target.name, e.target.value);
+    });
+});
+`
+        }]
+    },
+    {
+        label: 'Calculate Sum',
+        elements: [
+             { type: 'number', label: 'Value A', name: 'valA', placeholder: '0' },
+             { type: 'number', label: 'Value B', name: 'valB', placeholder: '0' },
+             { type: 'number', label: 'Total', name: 'total', disabled: true, placeholder: 'Result' },
+             { type: 'script', label: 'Calc Script', scriptContent: `
+const a = document.querySelector('input[name="valA"]');
+const b = document.querySelector('input[name="valB"]');
+const total = document.querySelector('input[name="total"]');
+
+const calc = () => {
+   if(a && b && total) {
+       total.value = (parseFloat(a.value)||0) + (parseFloat(b.value)||0);
+   }
+};
+
+if(a) a.addEventListener('input', calc);
+if(b) b.addEventListener('input', calc);
+`
+            }
+        ]
+    },
+    {
+        label: 'Fetch Dropdown Data',
+        elements: [
+            { type: 'select', label: 'Users', name: 'userSelect', options: ['Loading...'] },
+            { type: 'script', label: 'Fetch Script', scriptContent: `
+const select = document.querySelector('select[name="userSelect"]');
+if(select) {
+    fetch('https://jsonplaceholder.typicode.com/users')
+    .then(res => res.json())
+    .then(data => {
+        select.innerHTML = '<option value="">Select a user</option>';
+        data.forEach(user => {
+            const opt = document.createElement('option');
+            opt.value = user.id;
+            opt.text = user.name;
+            select.appendChild(opt);
+        });
+    })
+    .catch(err => {
+        select.innerHTML = '<option>Error loading data</option>';
+    });
+}
+`
+            }
+        ]
+    }
+];
+
+export const STYLE_SNIPPETS: SnippetItem[] = [
+    {
+        label: 'Card Container',
+        elements: [{
+            type: 'container',
+            label: 'Card',
+            styles: {
+                backgroundColor: '#ffffff',
+                padding: '24px',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                borderWidth: '1px',
+                borderColor: '#e5e7eb'
+            },
+            children: [
+                { type: 'typography', headingLevel: 'h3', textContent: 'Card Title', styles: { textAlign: 'left' } },
+                { type: 'text', label: 'Input inside card', name: 'cardInput' }
+            ]
+        }]
+    },
+    {
+        label: 'Alert Box (Error)',
+        elements: [{
+            type: 'container',
+            label: 'Error Alert',
+            styles: {
+                backgroundColor: '#fef2f2',
+                borderColor: '#f87171',
+                borderWidth: '1px',
+                borderRadius: '6px',
+                padding: '16px',
+                textColor: '#b91c1c'
+            },
+            children: [
+                 { type: 'typography', headingLevel: 'p', textContent: '⚠️ Error: Something went wrong.', styles: { fontWeight: 'bold', textColor: '#b91c1c' } }
+            ]
+        }]
+    },
+    {
+        label: 'Info Box (Blue)',
+        elements: [{
+            type: 'container',
+            label: 'Info Alert',
+            styles: {
+                backgroundColor: '#eff6ff',
+                borderColor: '#3b82f6',
+                borderWidth: '1px',
+                borderRadius: '6px',
+                padding: '16px',
+                textColor: '#1e40af'
+            },
+            children: [
+                 { type: 'typography', headingLevel: 'p', textContent: 'ℹ️ Information: Please read carefully.', styles: { fontWeight: 'bold', textColor: '#1e40af' } }
+            ]
+        }]
+    },
+    {
+        label: 'Primary Button',
+        elements: [{
+            type: 'button',
+            label: 'Call to Action',
+            styles: {
+                backgroundColor: '#4f46e5',
+                textColor: '#ffffff',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 6px rgba(79, 70, 229, 0.3)'
+            }
+        }]
+    },
+     {
+        label: 'Hero Section',
+        elements: [{
+            type: 'container',
+            label: 'Hero',
+            styles: {
+                backgroundColor: '#f3f4f6',
+                padding: '48px 24px',
+                borderRadius: '0px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '16px'
+            },
+            children: [
+                { type: 'typography', headingLevel: 'h1', textContent: 'Welcome to Our Service', styles: { textAlign: 'center', textColor: '#111827' } },
+                { type: 'typography', headingLevel: 'p', textContent: 'We provide the best solutions for your business needs.', styles: { textAlign: 'center', textColor: '#4b5563' } },
+                { type: 'button', label: 'Get Started', styles: { backgroundColor: '#111827', textColor: '#fff', borderRadius: '4px', padding: '10px 20px' } }
+            ]
+        }]
     }
 ];
 

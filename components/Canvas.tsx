@@ -74,39 +74,16 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
         const deltaX = e.clientX - resizing.startX;
         const deltaY = e.clientY - resizing.startY;
         
-        // Update width/height (simple pixel based for now)
-        // If startW was 0 or undefined, we assume a default base of e.g. 100% or allow px override.
-        // Usually resize sets explicit pixel width.
         const newW = resizing.startW + deltaX;
         const newH = resizing.startH + deltaY;
         
-        // Debouncing or throttling would be good here for huge trees, but for this app direct update is responsive enough
+        // Use updated updateElement which supports deep merge (preserves other styles)
         updateElement(resizing.id, { 
             styles: { 
-                ...(elements.find(el => el.id === resizing.id)?.styles || {}), // Need current styles? No, updateElement merges. But we need deep merge for styles?
-                // updateElement does shallow merge of props. If we pass styles object, it might overwrite.
-                // updateElement in App.tsx does: return { ...el, ...updatedProps };
-                // So if we pass styles: { ...oldStyles, width: ... }, it works.
-                // We need access to the element's current style to preserve other props? 
-                // We can't easily get it inside this effect without depending on elements.
-                // Actually updateElement in Canvas is passed from App.
-                // Let's pass the new width/height strings
                 width: `${Math.max(50, newW)}px`,
                 height: `${Math.max(20, newH)}px`
             }
         });
-        
-        // Wait, updateElement merges top level props. Styles is nested.
-        // We need to implement deep style update in updateElement or pass entire styles object here.
-        // Let's rely on the fact that we can trigger a style update. 
-        // We need to fetch the current styles first? 
-        // For simplicity in this effect, we will just dispatch the style update assuming the parent handles it.
-        // Actually, updateElement implementation in App.tsx replaces the key. 
-        // So we need to merge styles manually. 
-        // Since we don't have easy access to 'current element' inside this useEffect without deps,
-        // we might loose other styles if we just send { styles: { width } }.
-        // FIX: We need to modify updateElement to support partial style updates or handle it here.
-        // Let's assume we can pass a special property or handle it in the callback.
     };
 
     const handleMouseUp = () => {
@@ -119,13 +96,8 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizing]); // logic issue: 'updateElement' dependency? 
-  // To avoid complex dependency chains, we'll use a functional state update in App.tsx or just accept that we need to read current styles.
-  // Actually, we can just grab the element from the `elements` prop if we include it in dependency, but that causes re-attach on every render.
-  // Better: The resizer stores the initial styles.
+  }, [resizing, updateElement]); 
   
-  
-  // Custom resize handler that merges styles
   const handleResizeStart = (e: React.MouseEvent, element: FormElement) => {
       e.stopPropagation();
       e.preventDefault();
@@ -240,112 +212,114 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
     setEditingElementId(null);
   };
   
-  // Wrapper for updateElement to merge styles correctly during resize
-  const handleStyleUpdate = (id: string, newStyles: any) => {
-      // Find current style
-      // Since we can't easily sync state here without re-render, we might need to pass a callback or do a functional update if App supported it.
-      // But App.tsx updateElement uses functional update on state.
-      // We need to provide the FULL style object.
-      // We can do this by using the 'updateElement' prop.
-      // NOTE: We need the PREVIOUS styles. 
-      // We can solve this by passing a callback to updateElement that receives current element? 
-      // The current updateElement implementation (in App.tsx) takes (id, partialProps).
-      // It merges partialProps into element.
-      // If we pass { styles: { ...oldStyles, ...newStyles } }, we need oldStyles.
-      // Current implementation of Canvas doesn't easily expose 'getElementById'.
-      // Let's modify updateElement usage:
-      // We can try to get the element from `elements` prop, but it might be stale in the closure.
-      // Ideally, updateElement would support deep merging or a callback for the specific element.
-      // Given constraints, we will rely on `selectedElement` since resizing only happens on selected element!
-      if (selectedElement && selectedElement.id === id) {
-          updateElement(id, { styles: { ...selectedElement.styles, ...newStyles } });
-      }
-  };
-
 
   // Recursive Component to Render List
   const RecursiveList = ({ items, parentId }: { items: FormElement[], parentId: string | null }) => {
       return (
           <>
-            {items.map((element, index) => (
-              <div key={element.id} className="relative">
-                 <div 
-                    className={`absolute -top-2 left-0 right-0 h-1 bg-brand-primary rounded transition-all z-20 pointer-events-none ${dragOverTarget?.parentId === parentId && dragOverTarget?.index === index ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'}`}
-                 ></div>
-                 
-                 <div 
-                    className="h-4 -mt-2 w-full absolute z-10 bg-transparent"
-                    onDragOver={(e) => handleDragOver(e, parentId, index)}
-                    onDrop={(e) => handleDrop(e, parentId, index)}
-                 ></div>
-    
-                 <div
-                    draggable={!resizing} // Disable drag while resizing
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
+            {items.map((element, index) => {
+                // Determine layout styles to apply to wrapper
+                const s = element.styles || {};
+                const wrapperStyle: React.CSSProperties = {
+                    width: s.width,
+                    height: s.height,
+                    gridColumn: s.gridColumn,
+                    gridRow: s.gridRow,
+                    flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined,
+                    flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
+                    flexBasis: s.flexBasis,
+                    alignSelf: s.alignSelf,
+                };
+
+                return (
+                  <div key={element.id} className="relative contents-wrapper" style={wrapperStyle}>
+                     {/* Insertion Indicator */}
+                     <div 
+                        className={`absolute -top-2 left-0 right-0 h-1 bg-brand-primary rounded transition-all z-20 pointer-events-none ${dragOverTarget?.parentId === parentId && dragOverTarget?.index === index ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'}`}
+                     ></div>
+                     
+                     {/* Drag Target Area (before element) */}
+                     <div 
+                        className="h-4 -mt-2 w-full absolute z-10 bg-transparent"
+                        onDragOver={(e) => handleDragOver(e, parentId, index)}
+                        onDrop={(e) => handleDrop(e, parentId, index)}
+                     ></div>
+        
+                     <div
+                        draggable={!resizing} 
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSelectedElement(element);
+                                setEditingElementId(null);
+                            }
+                        }}
+                        onDragStart={(e) => {
                             e.stopPropagation();
-                            setSelectedElement(element);
-                            setEditingElementId(null);
-                        }
-                    }}
-                    onDragStart={(e) => {
-                        e.stopPropagation();
-                        e.dataTransfer.setData('application/json', JSON.stringify(element));
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedElement(element);
-                      setEditingElementId(null);
-                    }}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedElement(element);
-                      setEditingElementId(element.id);
-                    }}
-                    className={`group relative p-4 mb-2 border rounded-md cursor-grab active:cursor-grabbing transition-all transform duration-200 ease-in-out outline-none 
-                        ${selectedElement?.id === element.id 
-                            ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-2' 
-                            : 'border-gray-300 hover:border-gray-400 hover:shadow-md focus:border-brand-primary focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50'} 
-                        bg-white`}
-                 >
-                    <FormElementRenderer
-                      element={element}
-                      isEditing={editingElementId === element.id}
-                      onStartEditing={setEditingElementId}
-                      onStopEditing={() => setEditingElementId(null)}
-                      onUpdate={updateElement}
-                    >
-                        {['container', 'accordion'].includes(element.type) && (
-                            <div className="min-h-[50px] pt-2">
-                                <RecursiveList items={element.children || []} parentId={element.id} />
-                                <div 
-                                    className={`h-8 rounded-md transition-all border-2 border-dashed flex items-center justify-center text-xs font-semibold ${dragOverTarget?.parentId === element.id && dragOverTarget?.index === (element.children?.length || 0) ? 'opacity-100 border-brand-primary bg-blue-100 text-brand-primary' : 'opacity-0 h-0 overflow-hidden border-transparent'}`}
-                                    onDragOver={(e) => handleDragOver(e, element.id, element.children?.length || 0)}
-                                    onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}
-                                >
-                                    Drop Here
-                                </div>
+                            e.dataTransfer.setData('application/json', JSON.stringify(element));
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedElement(element);
+                          setEditingElementId(null);
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedElement(element);
+                          setEditingElementId(element.id);
+                        }}
+                        // We use h-full to fill the wrapper if specific height is set
+                        className={`group relative p-4 border rounded-md cursor-grab active:cursor-grabbing transition-all transform duration-200 ease-in-out outline-none 
+                            ${selectedElement?.id === element.id 
+                                ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-2' 
+                                : 'border-gray-300 hover:border-gray-400 hover:shadow-md focus:border-brand-primary focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50'} 
+                            bg-white h-full`}
+                     >
+                        <FormElementRenderer
+                          element={element}
+                          isEditing={editingElementId === element.id}
+                          onStartEditing={setEditingElementId}
+                          onStopEditing={() => setEditingElementId(null)}
+                          onUpdate={updateElement}
+                        >
+                            {/* Children rendering for containers */}
+                            {['container', 'accordion'].includes(element.type) && (
+                                <>
+                                    <RecursiveList items={element.children || []} parentId={element.id} />
+                                    {/* Drop Zone at end of list */}
+                                    <div 
+                                        className={`min-h-[30px] rounded-md transition-all border-2 border-dashed flex items-center justify-center text-xs font-semibold mt-2 
+                                        ${dragOverTarget?.parentId === element.id && dragOverTarget?.index === (element.children?.length || 0) 
+                                            ? 'opacity-100 border-brand-primary bg-blue-100 text-brand-primary' 
+                                            : 'opacity-50 border-gray-200 text-gray-400 h-8 hover:opacity-100'}`}
+                                        style={{ gridColumn: '1 / -1', width: '100%' }} // Make sure drop zone spans full width in grid
+                                        onDragOver={(e) => handleDragOver(e, element.id, element.children?.length || 0)}
+                                        onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}
+                                    >
+                                        Drop Here
+                                    </div>
+                                </>
+                            )}
+                        </FormElementRenderer>
+                        
+                        {/* Resize Handle for Selected Element */}
+                        {selectedElement?.id === element.id && (
+                            <div 
+                                className="absolute bottom-0 right-0 w-4 h-4 bg-brand-primary cursor-se-resize rounded-tl-md z-30 flex items-center justify-center"
+                                onMouseDown={(e) => handleResizeStart(e, element)}
+                                title="Drag to resize"
+                            >
+                                <svg className="w-3 h-3 text-white pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" transform="rotate(-45 12 12)"/></svg>
                             </div>
                         )}
-                    </FormElementRenderer>
-                    
-                    {/* Resize Handle for Selected Element */}
-                    {selectedElement?.id === element.id && (
-                        <div 
-                            className="absolute bottom-0 right-0 w-4 h-4 bg-brand-primary cursor-se-resize rounded-tl-md z-30 flex items-center justify-center"
-                            onMouseDown={(e) => handleResizeStart(e, element)}
-                            title="Drag to resize"
-                        >
-                            <svg className="w-3 h-3 text-white pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" transform="rotate(-45 12 12)"/></svg>
-                        </div>
-                    )}
-
-                    <TrashIcon onClick={(e) => handleDeleteElement(e, element.id)} />
-                 </div>
-              </div>
-            ))}
+    
+                        <TrashIcon onClick={(e) => handleDeleteElement(e, element.id)} />
+                     </div>
+                  </div>
+                );
+            })}
           </>
       );
   };
@@ -357,9 +331,10 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
         onDragOver={(e) => handleDragOver(e, null, elements.length)}
         onDrop={(e) => handleDrop(e, null, elements.length)}
     >
-      <div className={`p-4 min-h-[400px] border-2 border-dashed rounded-lg transition-all duration-300 ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50 shadow-inner' : 'border-gray-300'}`}>
+      {/* Root Canvas Area - default stack layout */}
+      <div className={`p-4 min-h-[400px] border-2 border-dashed rounded-lg transition-all duration-300 space-y-2 ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50 shadow-inner' : 'border-gray-300'}`}>
         {elements.length === 0 && (
-          <div className="flex items-center justify-center h-full text-gray-500 pointer-events-none">
+          <div className="flex items-center justify-center h-full text-gray-500 pointer-events-none p-10">
             <p>Drag and drop elements or snippets here to build your form</p>
           </div>
         )}

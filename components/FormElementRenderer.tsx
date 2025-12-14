@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import type { FormElement } from '../types';
+import type { FormElement, ElementStyle } from '../types';
 
 interface FormElementRendererProps {
   element: FormElement;
@@ -10,6 +10,7 @@ interface FormElementRendererProps {
   onUpdate?: (id: string, updatedProps: Partial<FormElement>) => void;
   preview?: boolean;
   hidden?: boolean;
+  forceRequired?: boolean; // New prop for conditional validation
   children?: React.ReactNode; // Support nested children
 }
 
@@ -66,11 +67,14 @@ const applyMask = (value: string, mask: string) => {
 };
 
 
-const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStartEditing, onStopEditing, onUpdate, preview = false, hidden = false, children }) => {
+const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStartEditing, onStopEditing, onUpdate, preview = false, hidden = false, forceRequired, children }) => {
   if (hidden && element.type !== 'script') return null;
 
   const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent, htmlContent, textContent, headingLevel, altText, inputMask, customErrorMessage } = element;
   
+  // Determine if required: override takes precedence if defined (for preview logic), otherwise fall back to static prop
+  const isRequired = forceRequired !== undefined ? forceRequired : required;
+
   // Local state for value in preview mode to handle masking 'controlled' input behavior
   const [internalValue, setInternalValue] = useState('');
   // Local state for focus tracking
@@ -91,34 +95,91 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       }
   }, [preview, type, scriptContent, label]);
 
-
-  // Styles Logic
-  const customStyle: React.CSSProperties = {
-      fontFamily: styles?.fontFamily === 'mono' ? 'monospace' : styles?.fontFamily === 'serif' ? 'serif' : 'inherit',
-      fontWeight: styles?.fontWeight || 'normal',
-      backgroundColor: styles?.backgroundColor || 'transparent',
-      borderColor: isFocused && styles?.focusBorderColor ? styles.focusBorderColor : styles?.borderColor,
-      borderWidth: styles?.borderWidth,
-      borderRadius: styles?.borderRadius,
-      padding: styles?.padding,
-      color: styles?.textColor,
-      textAlign: styles?.textAlign || 'left',
-      letterSpacing: styles?.letterSpacing,
-      lineHeight: styles?.lineHeight,
-      textDecoration: styles?.textDecoration,
-      boxShadow: isFocused && styles?.focusBoxShadow ? styles.focusBoxShadow : styles?.boxShadow,
-      width: styles?.width,
-      height: styles?.height,
+  // Style Logic Extraction
+  // We need to separate layout styles (applied to wrapper in Canvas) from appearance styles (applied to element here).
+  // If preview=true, we apply EVERYTHING here.
+  // If preview=false, layout styles are handled by Canvas wrapper, so we force width/height 100% to fill wrapper.
+  
+  const getCombinedStyles = (isLayout: boolean): React.CSSProperties => {
+      const s = styles || {};
+      if (isLayout) {
+          return {
+              width: s.width,
+              height: s.height,
+              gridColumn: s.gridColumn,
+              gridRow: s.gridRow,
+              flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined,
+              flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
+              flexBasis: s.flexBasis,
+              alignSelf: s.alignSelf,
+              // Layout container props (if this element IS a container)
+              display: s.display, // block, flex, grid
+              flexDirection: s.flexDirection,
+              justifyContent: s.justifyContent,
+              alignItems: s.alignItems,
+              flexWrap: s.flexWrap,
+              gridTemplateColumns: s.gridTemplateColumns,
+              gridTemplateRows: s.gridTemplateRows,
+              gap: s.gap,
+          };
+      } else {
+          // Appearance
+          return {
+              fontFamily: s.fontFamily === 'mono' ? 'monospace' : s.fontFamily === 'serif' ? 'serif' : 'inherit',
+              fontWeight: s.fontWeight || 'normal',
+              backgroundColor: s.backgroundColor || 'transparent',
+              borderColor: isFocused && s.focusBorderColor ? s.focusBorderColor : s.borderColor,
+              borderWidth: s.borderWidth,
+              borderRadius: s.borderRadius,
+              padding: s.padding,
+              color: s.textColor,
+              textAlign: s.textAlign || 'left',
+              letterSpacing: s.letterSpacing,
+              lineHeight: s.lineHeight,
+              textDecoration: s.textDecoration,
+              boxShadow: isFocused && s.focusBoxShadow ? s.focusBoxShadow : s.boxShadow,
+          };
+      }
   };
 
+  const layoutStyles = getCombinedStyles(true);
+  const appearanceStyles = getCombinedStyles(false);
+  
+  const containerStyle: React.CSSProperties = preview ? {
+      ...layoutStyles,
+      ...appearanceStyles,
+      position: 'relative' // Needed for offset calculations sometimes
+  } : {
+      ...appearanceStyles,
+      width: '100%',
+      height: '100%', // Fill the canvas wrapper
+      // In edit mode, grid/flex item props are on the wrapper, so we ignore them here
+      display: layoutStyles.display, // But internal display (flex/grid) MUST be preserved if it's a container
+      flexDirection: layoutStyles.flexDirection,
+      justifyContent: layoutStyles.justifyContent,
+      alignItems: layoutStyles.alignItems,
+      flexWrap: layoutStyles.flexWrap,
+      gridTemplateColumns: layoutStyles.gridTemplateColumns,
+      gridTemplateRows: layoutStyles.gridTemplateRows,
+      gap: layoutStyles.gap,
+  };
+
+  // Special handling: If element is NOT a container type, 'display' prop in styles usually refers to container behavior. 
+  // Standard inputs (text, select) are block or inline-block. 
+  // We generally enforce block for inputs in this builder for simplicity, unless customized.
+  
   const currentSize = styles?.size || 'medium';
   const sizeClass = sizeClasses[currentSize];
   const disabledClass = disabled ? 'opacity-50 cursor-not-allowed' : '';
   const pointerEvents = preview ? '' : 'pointer-events-none';
   
-  const inputStyle = { ...customStyle, width: '100%', height: styles?.height }; // Ensure full width inside container
-  const containerStyle = { ...customStyle, borderWidth: 0, backgroundColor: 'transparent', boxShadow: 'none' }; 
-
+  // Input specific style (excludes container layout props)
+  const inputStyle: React.CSSProperties = { 
+      ...appearanceStyles, 
+      width: '100%', 
+      height: type === 'container' || type === 'iframe' || type === 'image' ? '100%' : styles?.height 
+  }; 
+  
   // Masking Handler
   const handleMaskedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!inputMask) return;
@@ -165,7 +226,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         />
       );
     }
-    const labelText = `${label}${required ? ' *' : ''}`;
+    const labelText = `${label}${isRequired ? ' *' : ''}`;
     return (
       <span onDoubleClick={(e) => { if (!preview) { e.stopPropagation(); onStartEditing?.(id); } }}>
         {labelText}
@@ -177,7 +238,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       const [isOpen, setIsOpen] = useState(true);
       
       return (
-        <div className="w-full border rounded-md overflow-hidden" style={customStyle}>
+        <div className="w-full border rounded-md overflow-hidden" style={containerStyle}>
             <button 
                 type="button"
                 onClick={() => setIsOpen(!isOpen)} 
@@ -199,13 +260,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       );
   }
 
-  // News Card Logic (omitted for brevity as it was correct in previous turn, keeping it)
+  // News Card Logic
   const NewsCardComponent = () => {
-      // ... same as before
       const [expanded, setExpanded] = useState(false);
       const displayImage = (newsImage && newsImage.trim() !== '') ? newsImage : "https://via.placeholder.com/600x300?text=Latest+News";
       return (
-          <div className={`border rounded-lg overflow-hidden shadow-sm bg-white ${pointerEvents}`} style={{ borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius, boxShadow: styles?.boxShadow, width: styles?.width }}>
+          <div className={`border rounded-lg overflow-hidden shadow-sm bg-white ${pointerEvents}`} style={containerStyle}>
               <img src={displayImage} alt={newsTitle || "News"} className="w-full h-48 object-cover" />
               <div className="p-4">
                   <h3 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{newsTitle}</h3>
@@ -220,14 +280,14 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   
   // Shared props for validation and a11y
   const validationProps = {
-      required,
+      required: isRequired,
       minLength,
       maxLength,
       min: min as string | number,
       max: max as string | number,
       step: step,
       pattern: pattern,
-      'aria-required': required,
+      'aria-required': isRequired,
       'aria-invalid': false, 
       title: customErrorMessage || (inputMask ? `Format: ${inputMask}` : undefined),
       onFocus: handleFocus,
@@ -241,7 +301,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
   switch (type) {
     case 'html-block':
-        return htmlContent || preview ? <div className="w-full" style={customStyle} dangerouslySetInnerHTML={{ __html: htmlContent || '' }} /> : <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded">HTML Block</div>;
+        return htmlContent || preview ? <div className="w-full" style={containerStyle} dangerouslySetInnerHTML={{ __html: htmlContent || '' }} /> : <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded">HTML Block</div>;
     case 'divider':
         return <hr className="w-full border-t my-2" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} />;
     case 'image':
@@ -251,39 +311,26 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                     src={src || "https://via.placeholder.com/300x200?text=Image+Placeholder"} 
                     alt={altText || label} 
                     className={`max-w-full h-auto ${pointerEvents}`}
-                    style={{...customStyle, width: styles?.width || 'auto', height: styles?.height || 'auto'}}
+                    style={{...appearanceStyles, width: '100%', height: '100%', objectFit: 'cover'}}
                 />
             </div>
          );
     case 'typography':
         const Tag = (headingLevel || 'p') as React.ElementType;
         const textClasses = { h1: 'text-4xl font-bold mb-4', h2: 'text-3xl font-bold mb-3', h3: 'text-2xl font-bold mb-3', h4: 'text-xl font-bold mb-2', h5: 'text-lg font-bold mb-2', h6: 'text-base font-bold mb-2', p: 'text-base mb-2', span: 'text-base' };
-        return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[headingLevel || 'p']}`} style={customStyle}>{textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
+        return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[headingLevel || 'p']}`} style={appearanceStyles}>{textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
     case 'script':
         if (preview) return null;
         return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm">Script Element</div>;
     case 'container':
-        // Layout logic
-        const contentStyle: React.CSSProperties = {
-            display: styles?.display || 'block',
-            // Flex Props
-            flexDirection: styles?.flexDirection,
-            justifyContent: styles?.justifyContent,
-            alignItems: styles?.alignItems,
-            flexWrap: styles?.flexWrap,
-            // Grid Props
-            gridTemplateColumns: styles?.gridTemplateColumns,
-            gridTemplateRows: styles?.gridTemplateRows,
-            // Shared
-            gap: styles?.gap || ((styles?.display === 'flex' || styles?.display === 'grid') ? '1rem' : undefined),
-            height: '100%'
-        };
+        // Default stack class only if display is not set or block
         const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-2' : '';
+        const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-md min-h-[50px]';
 
         return (
-            <div className="w-full p-4 border border-dashed border-gray-300 rounded-md min-h-[100px]" style={customStyle}>
-                <div className="mb-2"><label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label></div>
-                <div className={`${defaultStackClass}`} style={contentStyle}>{children}</div>
+            <div className={`w-full ${borderClass} ${defaultStackClass} p-4`} style={containerStyle}>
+                {!preview && <div className="mb-2"><label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label></div>}
+                {children}
             </div>
         );
     case 'accordion': return <AccordionComponent />;
@@ -323,7 +370,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'checkbox':
       return (
         <div className="flex items-center" style={containerStyle}>
-          <input id={name} name={name} type="checkbox" disabled={disabled} {...validationProps} className={`text-brand-primary border-gray-300 rounded focus:ring-brand-primary ${pointerEvents} ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} style={inputStyle} />
+          <input id={name} name={name} type="checkbox" disabled={disabled} {...validationProps} className={`text-brand-primary border-gray-300 rounded focus:ring-brand-primary ${pointerEvents} ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} style={{...inputStyle, width: 'auto', height: 'auto'}} />
           <label htmlFor={name} className="ml-2 block text-sm text-gray-900"><EditableLabel forCheckboxOrRadio={true} /></label>
         </div>
       );
@@ -334,7 +381,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
           <div className={`${pointerEvents}`}>
             {options?.map((option, index) => (
               <div key={index} className="flex items-center mt-1">
-                <input id={`${name}-${index}`} name={name} type="radio" disabled={disabled} value={option} {...validationProps} className={`text-brand-primary border-gray-300 focus:ring-brand-primary ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} style={inputStyle} />
+                <input id={`${name}-${index}`} name={name} type="radio" disabled={disabled} value={option} {...validationProps} className={`text-brand-primary border-gray-300 focus:ring-brand-primary ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} style={{...inputStyle, width: 'auto', height: 'auto'}} />
                 <label htmlFor={`${name}-${index}`} className="ml-2 block text-sm text-gray-900">{option}</label>
               </div>
             ))}
@@ -380,9 +427,9 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       // Legacy color support map
       const buttonColorClasses: Record<string, string> = { primary: 'bg-brand-primary hover:bg-brand-accent text-white', secondary: 'bg-gray-600 hover:bg-gray-700 text-white', danger: 'bg-red-600 hover:bg-red-700 text-white' };
       const buttonClass = styles?.backgroundColor ? '' : buttonColorClasses[styles?.color || 'primary']; 
-      return <button type="button" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${buttonClass} ${disabledClass}`} style={{...customStyle, backgroundColor: styles?.backgroundColor || undefined, width: styles?.width, height: styles?.height}} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
+      return <button type="button" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${buttonClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
     case 'reset-button':
-        return <button type="reset" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 bg-gray-200 hover:bg-gray-300 text-gray-800 ${sizeClass} ${disabledClass}`} style={{...customStyle, backgroundColor: styles?.backgroundColor || undefined, width: styles?.width, height: styles?.height}} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
+        return <button type="reset" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 bg-gray-200 hover:bg-gray-300 text-gray-800 ${sizeClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
     case 'table':
         const cols = element.colCount || 3;
         const rows = rowCount || 3;
@@ -390,7 +437,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         return (
             <div className="w-full overflow-x-auto" style={containerStyle}>
                 <label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-                <table className="min-w-full border-collapse border border-gray-300 bg-white text-sm" style={{ borderColor: styles?.borderColor, boxShadow: styles?.boxShadow, width: styles?.width }}>
+                <table className="min-w-full border-collapse border border-gray-300 bg-white text-sm" style={{ borderColor: styles?.borderColor, boxShadow: styles?.boxShadow, width: '100%' }}>
                     <thead className="bg-gray-50">
                         <tr>{ths.map((h, i) => <th key={i} className="border border-gray-300 px-4 py-2 text-left font-medium text-gray-500" style={{ borderColor: styles?.borderColor, color: styles?.textColor }}>{h}</th>)}</tr>
                     </thead>
@@ -404,13 +451,13 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         return (
             <div className="w-full" style={containerStyle}>
                  <label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-                 <iframe src={src || "about:blank"} className={`w-full border border-gray-300 bg-gray-100 ${pointerEvents}`} style={{ height: styles?.height || '300px', width: styles?.width || '100%', borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius, boxShadow: styles?.boxShadow }} title={label} />
+                 <iframe src={src || "about:blank"} className={`w-full border border-gray-300 bg-gray-100 ${pointerEvents}`} style={{ height: styles?.height || '300px', width: '100%', borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius, boxShadow: styles?.boxShadow }} title={label} />
                  {!src && <div className="text-xs text-gray-500 italic mt-1">Select element to set Source URL in properties.</div>}
             </div>
         );
     case 'navbar':
         return (
-            <div className="w-full bg-white border-b border-gray-200 shadow-sm py-3 px-4 flex items-center justify-between" style={customStyle}>
+            <div className="w-full bg-white border-b border-gray-200 shadow-sm py-3 px-4 flex items-center justify-between" style={containerStyle}>
                 <div className="font-bold text-xl text-brand-primary" style={{ color: styles?.textColor }}>{brand || label}</div>
                 <div className="space-x-4">{links?.map((link, i) => <a key={i} href={link.url} className={`text-gray-600 hover:text-brand-primary font-medium ${pointerEvents}`} onClick={e => e.preventDefault()} style={{ color: styles?.textColor }}>{link.label}</a>) || <span className="text-gray-400 italic">No links configured</span>}</div>
             </div>
