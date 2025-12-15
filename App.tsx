@@ -244,7 +244,7 @@ const App: React.FC = () => {
               }
               
               const layoutStyleStr = layoutStyles.length > 0 ? `style="${layoutStyles.join('; ')}"` : '';
-              const wrapperClass = (!s.display || s.display === 'block') ? 'space-y-2' : '';
+              const wrapperClass = (!s.display || s.display === 'block') ? 'space-y-4' : '';
 
               // For HTML generation, we typically want the container to be the layout wrapper.
               // In our recursive edit mode, we had wrappers. Here we flatten it a bit.

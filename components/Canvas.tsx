@@ -165,6 +165,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
       }),
       styles: {
         size: 'medium',
+        ...(data.type === 'container' ? { padding: '16px', gap: '16px' } : {}),
         ...(data.styles || {})
       },
     });
@@ -332,7 +333,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
         onDrop={(e) => handleDrop(e, null, elements.length)}
     >
       {/* Root Canvas Area - default stack layout */}
-      <div className={`p-4 min-h-[400px] border-2 border-dashed rounded-lg transition-all duration-300 space-y-2 ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50 shadow-inner' : 'border-gray-300'}`}>
+      <div className={`p-4 min-h-[400px] border-2 border-dashed rounded-lg transition-all duration-300 space-y-4 ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50 shadow-inner' : 'border-gray-300'}`}>
         {elements.length === 0 && (
           <div className="flex items-center justify-center h-full text-gray-500 pointer-events-none p-10">
             <p>Drag and drop elements or snippets here to build your form</p>

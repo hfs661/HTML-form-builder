@@ -15,9 +15,9 @@ interface FormElementRendererProps {
 }
 
 const sizeClasses: Record<string, string> = {
-  small: 'p-1 text-sm',
-  medium: 'p-2 text-base',
-  large: 'p-3 text-lg',
+  small: 'px-2 py-1 text-sm',
+  medium: 'px-3 py-2 text-base',
+  large: 'px-4 py-3 text-lg',
 };
 
 const checkboxRadioSizeClasses: Record<string, string> = {
@@ -323,8 +323,8 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         if (preview) return null;
         return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm">Script Element</div>;
     case 'container':
-        // Default stack class only if display is not set or block
-        const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-2' : '';
+        // Default stack class only if display is not set or block. Increased spacing.
+        const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-4' : '';
         const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-md min-h-[50px]';
 
         return (
@@ -413,7 +413,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <input type="file" id={name} name={name} disabled={disabled} {...validationProps} accept={element.accept} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-brand-primary hover:file:bg-blue-100 ${pointerEvents} ${sizeClass.replace('p-2', '')} ${disabledClass}`} style={inputStyle} />
+          <input type="file" id={name} name={name} disabled={disabled} {...validationProps} accept={element.accept} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-brand-primary hover:file:bg-blue-100 ${pointerEvents} ${sizeClass.replace('px-3 py-2', '')} ${disabledClass}`} style={inputStyle} />
         </div>
       );
     case 'color':
