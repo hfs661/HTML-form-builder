@@ -6,44 +6,25 @@ import FormElementRenderer from './FormElementRenderer';
 interface CanvasProps {
   elements: FormElement[];
   setElements: (newElements: FormElement[] | ((prev: FormElement[]) => FormElement[])) => void;
-  setSelectedElement: (element: FormElement | null) => void;
-  selectedElement: FormElement | null;
+  setSelectedIds: (ids: string[]) => void;
+  selectedIds: string[];
   updateElement: (id: string, updatedProps: Partial<FormElement>) => void;
 }
 
 const TrashIcon: React.FC<{onClick: (e: React.MouseEvent) => void}> = ({onClick}) => (
-    <button 
-        onClick={onClick} 
-        className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 z-10 focus:outline-none focus:ring-2 focus:ring-red-500 shadow-sm"
-        title="Delete Element"
-        aria-label="Delete Element"
-    >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-        </svg>
-    </button>
+    <button onClick={onClick} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity opacity-0 group-hover:opacity-100 z-10 focus:outline-none shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
 );
 
-
-const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedElement, selectedElement, updateElement }) => {
+const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, selectedIds, updateElement }) => {
   const [dragOverTarget, setDragOverTarget] = useState<{ parentId: string | null, index: number } | null>(null);
   const [editingElementId, setEditingElementId] = useState<string | null>(null);
-  
-  // Resize State
   const [resizing, setResizing] = useState<{ id: string, startX: number, startY: number, startW: number, startH: number } | null>(null);
 
-  // Helper to recursively find and update tree
   const recursiveUpdate = (tree: FormElement[], parentId: string | null, updateFn: (list: FormElement[]) => FormElement[]): FormElement[] => {
-      if (parentId === null) {
-          return updateFn(tree);
-      }
+      if (parentId === null) return updateFn(tree);
       return tree.map(node => {
-          if (node.id === parentId) {
-              return { ...node, children: updateFn(node.children || []) };
-          }
-          if (node.children) {
-              return { ...node, children: recursiveUpdate(node.children, parentId, updateFn) };
-          }
+          if (node.id === parentId) return { ...node, children: updateFn(node.children || []) };
+          if (node.children) return { ...node, children: recursiveUpdate(node.children, parentId, updateFn) };
           return node;
       });
   };
@@ -66,61 +47,38 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
       return null;
   };
 
-  // Resize Effects
   useEffect(() => {
     if (!resizing) return;
-
     const handleMouseMove = (e: MouseEvent) => {
         const deltaX = e.clientX - resizing.startX;
         const deltaY = e.clientY - resizing.startY;
-        
-        const newW = resizing.startW + deltaX;
-        const newH = resizing.startH + deltaY;
-        
-        // Use updated updateElement which supports deep merge (preserves other styles)
         updateElement(resizing.id, { 
             styles: { 
-                width: `${Math.max(50, newW)}px`,
-                height: `${Math.max(20, newH)}px`
-            }
+                ...elements.find(el => el.id === resizing.id)?.styles,
+                width: `${Math.max(50, resizing.startW + deltaX)}px`, 
+                height: `${Math.max(20, resizing.startH + deltaY)}px` 
+            } 
         });
     };
-
-    const handleMouseUp = () => {
-        setResizing(null);
-    };
-
+    const handleMouseUp = () => setResizing(null);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [resizing, updateElement]); 
+    return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); };
+  }, [resizing, updateElement, elements]); 
   
   const handleResizeStart = (e: React.MouseEvent, element: FormElement) => {
       e.stopPropagation();
       e.preventDefault();
-      const rect = (e.target as HTMLElement).parentElement?.getBoundingClientRect();
+      const rect = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect();
       if (!rect) return;
-      setResizing({
-          id: element.id,
-          startX: e.clientX,
-          startY: e.clientY,
-          startW: rect.width,
-          startH: rect.height
-      });
+      setResizing({ id: element.id, startX: e.clientX, startY: e.clientY, startW: rect.width, startH: rect.height });
   };
 
-
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetParentId: string | null, dropIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     setDragOverTarget(null);
-    
     const itemData = e.dataTransfer.getData('application/json');
     if (!itemData) return;
-
     const draggedItem = JSON.parse(itemData);
 
     if (draggedItem.id) {
@@ -135,12 +93,11 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
                  if (oldIndex < dropIndex) finalIndex--;
              }
              if (finalIndex < 0) finalIndex = 0;
-             newTree = recursiveUpdate(newTree, targetParentId, (list) => {
+             return recursiveUpdate(newTree, targetParentId, (list) => {
                  const newList = [...list];
                  newList.splice(finalIndex, 0, found.node);
                  return newList;
              });
-             return newTree;
         });
         return;
     }
@@ -148,206 +105,118 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedEleme
     const createNewElement = (data: any): FormElement => ({
       id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: data.type as FormElementType,
-      label: data.label || (data.type === 'news-card' ? 'Latest News' : data.type === 'container' ? 'Container' : data.type === 'accordion' ? 'Accordion Section' : 'New Element'),
-      name: data.name || `element${Date.now()}`,
-      placeholder: data.placeholder || '',
-      options: data.options || (['select', 'radio'].includes(data.type) ? ['Option 1', 'Option 2'] : undefined),
-      required: data.required || false,
-      children: ['container', 'accordion'].includes(data.type) ? [] : undefined,
-      ...(data.type === 'text' && { subType: data.subType || 'text' }),
-      ...((data.type === 'number' || data.type === 'range') && { min: 0, max: 100, step: 1 }),
-      ...(data.type === 'file' && { accept: '' }),
-      ...(data.type === 'navbar' && { links: [{ label: 'Home', url: '#' }, { label: 'About', url: '#' }] }),
-      ...(data.type === 'news-card' && { 
-          newsTitle: 'Breaking News', 
-          newsContent: 'Latest news content...',
-          newsImage: 'https://via.placeholder.com/300x150?text=News+Image' 
-      }),
-      styles: {
-        size: 'medium',
-        ...(data.type === 'container' ? { padding: '16px', gap: '16px' } : {}),
-        ...(data.styles || {})
-      },
+      label: data.label || 'New Element',
+      name: data.name || `el_${Date.now()}`,
+      options: data.options,
+      children: data.children?.map((c: any) => createNewElement(c)),
+      styles: { size: 'medium', ...(data.styles || {}) },
+      textContent: data.textContent,
+      headingLevel: data.headingLevel,
+      src: data.src,
+      altText: data.altText
     });
 
-    const insertElements = (elementsToAdd: FormElement[]) => {
-        setElements((prev) => {
-            return recursiveUpdate(prev, targetParentId, (list) => {
-                const newList = [...list];
-                newList.splice(dropIndex, 0, ...elementsToAdd);
-                return newList;
-            });
-        });
-        if (elementsToAdd.length > 0) {
-            setSelectedElement(elementsToAdd[0]);
-        }
-    };
-
-    if (draggedItem.isSnippet && draggedItem.elements) {
-        const newSnippetElements = draggedItem.elements.map((elData: any) => createNewElement(elData));
-        insertElements(newSnippetElements);
-        return;
-    }
-    insertElements([createNewElement(draggedItem)]);
+    setElements((prev) => recursiveUpdate(prev, targetParentId, (list) => {
+        const newList = [...list];
+        const elementsToAdd = draggedItem.isSnippet ? draggedItem.elements.map(createNewElement) : [createNewElement(draggedItem)];
+        newList.splice(dropIndex, 0, ...elementsToAdd);
+        return newList;
+    }));
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>, parentId: string | null, index: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dragOverTarget?.parentId !== parentId || dragOverTarget?.index !== index) {
-        setDragOverTarget({ parentId, index });
-    }
+    e.preventDefault(); e.stopPropagation();
+    if (dragOverTarget?.parentId !== parentId || dragOverTarget?.index !== index) setDragOverTarget({ parentId, index });
   };
 
-  const handleDeleteElement = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setElements((prev) => recursiveDelete(prev, id));
-    if (selectedElement?.id === id) {
-        setSelectedElement(null);
-    }
+  const handleSelect = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter(x => x !== id));
+          else setSelectedIds([...selectedIds, id]);
+      } else {
+          setSelectedIds([id]);
+      }
+      setEditingElementId(null);
   };
 
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedElement(null);
-    setEditingElementId(null);
-  };
-  
-
-  // Recursive Component to Render List
   const RecursiveList = ({ items, parentId }: { items: FormElement[], parentId: string | null }) => {
       return (
           <>
             {items.map((element, index) => {
-                // Determine layout styles to apply to wrapper
+                const isSelected = selectedIds.includes(element.id);
                 const s = element.styles || {};
-                const wrapperStyle: React.CSSProperties = {
-                    width: s.width,
-                    height: s.height,
-                    gridColumn: s.gridColumn,
-                    gridRow: s.gridRow,
-                    flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined,
-                    flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
-                    flexBasis: s.flexBasis,
-                    alignSelf: s.alignSelf,
-                };
+                const wrapperStyle: React.CSSProperties = { width: s.width, height: s.height, gridColumn: s.gridColumn, gridRow: s.gridRow, flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined };
 
                 return (
-                  <div key={element.id} className="relative contents-wrapper" style={wrapperStyle}>
-                     {/* Insertion Indicator */}
-                     <div 
-                        className={`absolute -top-2 left-0 right-0 h-1 bg-brand-primary rounded transition-all z-20 pointer-events-none ${dragOverTarget?.parentId === parentId && dragOverTarget?.index === index ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'}`}
-                     ></div>
+                  <div key={element.id} className="relative contents-wrapper transition-all duration-200" style={wrapperStyle}>
+                     {/* Enhanced Drop Indicator */}
+                     <div className={`absolute -top-3 left-0 right-0 h-1.5 z-20 pointer-events-none flex items-center justify-center transition-all duration-200 ease-out ${dragOverTarget?.parentId === parentId && dragOverTarget?.index === index ? 'opacity-100 scale-100' : 'opacity-0 scale-90'}`}>
+                        <div className="w-full h-[2px] bg-brand-primary shadow-lg relative rounded-full">
+                             <div className="absolute left-0 -top-1 w-2.5 h-2.5 bg-brand-primary rounded-full shadow-sm transform -translate-x-1/2"></div>
+                        </div>
+                     </div>
                      
-                     {/* Drag Target Area (before element) */}
-                     <div 
-                        className="h-4 -mt-2 w-full absolute z-10 bg-transparent"
-                        onDragOver={(e) => handleDragOver(e, parentId, index)}
-                        onDrop={(e) => handleDrop(e, parentId, index)}
-                     ></div>
-        
+                     <div className="h-4 -mt-2 w-full absolute z-10" onDragOver={(e) => handleDragOver(e, parentId, index)} onDrop={(e) => handleDrop(e, parentId, index)}></div>
                      <div
-                        draggable={!resizing} 
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setSelectedElement(element);
-                                setEditingElementId(null);
-                            }
-                        }}
-                        onDragStart={(e) => {
-                            e.stopPropagation();
-                            e.dataTransfer.setData('application/json', JSON.stringify(element));
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedElement(element);
-                          setEditingElementId(null);
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedElement(element);
-                          setEditingElementId(element.id);
-                        }}
-                        // We use h-full to fill the wrapper if specific height is set
-                        className={`group relative p-4 border rounded-md cursor-grab active:cursor-grabbing transition-all transform duration-200 ease-in-out outline-none 
-                            ${selectedElement?.id === element.id 
-                                ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-2' 
-                                : 'border-gray-300 hover:border-gray-400 hover:shadow-md focus:border-brand-primary focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50'} 
-                            bg-white h-full`}
+                        draggable={!resizing}
+                        onClick={(e) => handleSelect(e, element.id)}
+                        onDoubleClick={(e) => { e.stopPropagation(); handleSelect(e, element.id); setEditingElementId(element.id); }}
+                        onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify(element)); }}
+                        onDragOver={(e) => element.type === 'container' ? handleDragOver(e, element.id, element.children?.length || 0) : null}
+                        className={`group relative p-4 border rounded-md cursor-grab active:cursor-grabbing transition-all duration-150 outline-none 
+                            ${isSelected ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-1 z-10' : 'border-gray-300 hover:border-gray-400'} 
+                            ${dragOverTarget?.parentId === element.id ? 'bg-blue-50 ring-2 ring-brand-primary border-brand-primary' : 'bg-white'} h-full shadow-sm hover:shadow-md`}
                      >
-                        <FormElementRenderer
-                          element={element}
-                          isEditing={editingElementId === element.id}
-                          onStartEditing={setEditingElementId}
-                          onStopEditing={() => setEditingElementId(null)}
-                          onUpdate={updateElement}
-                        >
-                            {/* Children rendering for containers */}
+                        <FormElementRenderer element={element} isEditing={editingElementId === element.id} onStartEditing={setEditingElementId} onStopEditing={() => setEditingElementId(null)} onUpdate={updateElement}>
                             {['container', 'accordion'].includes(element.type) && (
-                                <>
+                                <div className="min-h-[40px] pt-2">
                                     <RecursiveList items={element.children || []} parentId={element.id} />
-                                    {/* Drop Zone at end of list */}
-                                    <div 
-                                        className={`min-h-[30px] rounded-md transition-all border-2 border-dashed flex items-center justify-center text-xs font-semibold mt-2 
-                                        ${dragOverTarget?.parentId === element.id && dragOverTarget?.index === (element.children?.length || 0) 
-                                            ? 'opacity-100 border-brand-primary bg-blue-100 text-brand-primary' 
-                                            : 'opacity-50 border-gray-200 text-gray-400 h-8 hover:opacity-100'}`}
-                                        style={{ gridColumn: '1 / -1', width: '100%' }} // Make sure drop zone spans full width in grid
-                                        onDragOver={(e) => handleDragOver(e, element.id, element.children?.length || 0)}
-                                        onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}
-                                    >
-                                        Drop Here
+                                    <div className={`h-12 border-2 border-dashed rounded flex items-center justify-center text-xs font-medium transition-colors mt-2 ${dragOverTarget?.parentId === element.id && dragOverTarget?.index === (element.children?.length || 0) ? 'border-brand-primary bg-blue-50 text-brand-primary' : 'border-gray-200 text-gray-400'}`} onDragOver={(e) => handleDragOver(e, element.id, element.children?.length || 0)} onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}>
+                                        {element.children && element.children.length === 0 ? "Drop items here" : "Append to end"}
                                     </div>
-                                </>
+                                </div>
                             )}
                         </FormElementRenderer>
-                        
-                        {/* Resize Handle for Selected Element */}
-                        {selectedElement?.id === element.id && (
+                        {isSelected && selectedIds.length === 1 && (
                             <div 
-                                className="absolute bottom-0 right-0 w-4 h-4 bg-brand-primary cursor-se-resize rounded-tl-md z-30 flex items-center justify-center"
+                                className="absolute bottom-0 right-0 w-3 h-3 bg-brand-primary cursor-se-resize rounded-tl-sm z-30 flex items-center justify-center hover:w-4 hover:h-4 transition-all" 
                                 onMouseDown={(e) => handleResizeStart(e, element)}
-                                title="Drag to resize"
                             >
-                                <svg className="w-3 h-3 text-white pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" transform="rotate(-45 12 12)"/></svg>
+                                <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 19L5 5" /></svg>
                             </div>
                         )}
-    
-                        <TrashIcon onClick={(e) => handleDeleteElement(e, element.id)} />
+                        <TrashIcon onClick={(e) => { e.stopPropagation(); setElements(prev => recursiveDelete(prev, element.id)); setSelectedIds([]); }} />
                      </div>
                   </div>
                 );
             })}
+            
+            {/* Last Item Drop Indicator for Root/Containers */}
+             <div className={`relative h-0 transition-all ${dragOverTarget?.parentId === parentId && dragOverTarget?.index === items.length ? 'opacity-100' : 'opacity-0'}`}>
+                 <div className="absolute top-0 left-0 right-0 h-1.5 z-20 pointer-events-none flex items-center justify-center">
+                    <div className="w-full h-[2px] bg-brand-primary shadow-lg relative rounded-full">
+                         <div className="absolute left-0 -top-1 w-2.5 h-2.5 bg-brand-primary rounded-full shadow-sm transform -translate-x-1/2"></div>
+                    </div>
+                 </div>
+             </div>
           </>
       );
   };
 
   return (
-    <div 
-        className="flex-1 p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-white custom-scrollbar"
-        onClick={handleCanvasClick}
-        onDragOver={(e) => handleDragOver(e, null, elements.length)}
-        onDrop={(e) => handleDrop(e, null, elements.length)}
-    >
-      {/* Root Canvas Area - default stack layout */}
-      <div className={`p-4 min-h-[400px] border-2 border-dashed rounded-lg transition-all duration-300 space-y-4 ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50 shadow-inner' : 'border-gray-300'}`}>
+    <div className="flex-1 p-6 md:p-8 lg:p-12 h-full overflow-y-auto bg-white custom-scrollbar" onClick={() => setSelectedIds([])} onDragOver={(e) => handleDragOver(e, null, elements.length)} onDrop={(e) => handleDrop(e, null, elements.length)}>
+      <div className={`p-6 min-h-[400px] border-2 border-dashed rounded-xl transition-all duration-300 space-y-4 ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50/30' : 'border-gray-200 hover:border-gray-300'}`}>
         {elements.length === 0 && (
-          <div className="flex items-center justify-center h-full text-gray-500 pointer-events-none p-10">
-            <p>Drag and drop elements or snippets here to build your form</p>
-          </div>
+            <div className="flex flex-col items-center justify-center h-64 text-gray-400 pointer-events-none animate-fade-in-staggered">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                <p className="text-lg font-medium">Drag elements here to start building</p>
+                <p className="text-sm opacity-75">or drag a template from the left</p>
+            </div>
         )}
-        
         <RecursiveList items={elements} parentId={null} />
-        
-         <div 
-            className={`h-8 rounded-md transition-all border-2 border-dashed border-brand-primary bg-blue-50 flex items-center justify-center text-brand-primary text-xs font-semibold ${dragOverTarget?.parentId === null && dragOverTarget?.index === elements.length ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}
-            onDragOver={(e) => handleDragOver(e, null, elements.length)}
-         >
-            Drop Here
-         </div>
+        {/* Invisible drop target at the bottom to ensure easy dropping at the end */}
+        <div className="h-12 w-full" onDragOver={(e) => handleDragOver(e, null, elements.length)}></div>
       </div>
     </div>
   );

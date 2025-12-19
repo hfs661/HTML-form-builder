@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { FormElement, ElementStyle } from '../types';
 
 interface FormElementRendererProps {
@@ -10,8 +10,9 @@ interface FormElementRendererProps {
   onUpdate?: (id: string, updatedProps: Partial<FormElement>) => void;
   preview?: boolean;
   hidden?: boolean;
-  forceRequired?: boolean; // New prop for conditional validation
-  children?: React.ReactNode; // Support nested children
+  error?: string | null;
+  forceRequired?: boolean;
+  children?: React.ReactNode;
 }
 
 const sizeClasses: Record<string, string> = {
@@ -26,12 +27,11 @@ const checkboxRadioSizeClasses: Record<string, string> = {
   large: 'h-5 w-5',
 };
 
-// Simple mask helper
 const applyMask = (value: string, mask: string) => {
     let i = 0;
     let valIndex = 0;
     let result = '';
-    const rawValue = value.replace(/[^a-zA-Z0-9]/g, ''); // strip to alphanumeric
+    const rawValue = value.replace(/[^a-zA-Z0-9]/g, '');
 
     while (i < mask.length && valIndex < rawValue.length) {
         const maskChar = mask[i];
@@ -42,7 +42,7 @@ const applyMask = (value: string, mask: string) => {
                 result += valChar;
                 valIndex++;
             } else {
-                break; // Invalid char for mask
+                break;
             }
         } else if (maskChar === 'a') {
             if (/[a-zA-Z]/.test(valChar)) {
@@ -55,10 +55,9 @@ const applyMask = (value: string, mask: string) => {
              result += valChar;
              valIndex++;
         } else {
-            // Literal char in mask
             result += maskChar;
             if (valChar === maskChar) {
-                valIndex++; // consume if it matched
+                valIndex++;
             }
         }
         i++;
@@ -66,23 +65,30 @@ const applyMask = (value: string, mask: string) => {
     return result;
 };
 
-
-const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStartEditing, onStopEditing, onUpdate, preview = false, hidden = false, forceRequired, children }) => {
+const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStartEditing, onStopEditing, onUpdate, preview = false, hidden = false, error, forceRequired, children }) => {
   if (hidden && element.type !== 'script') return null;
 
-  const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent, htmlContent, textContent, headingLevel, altText, inputMask, customErrorMessage } = element;
+  const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent, onClickScript, htmlContent, textContent, headingLevel, altText, inputMask, customErrorMessage } = element;
   
-  // Determine if required: override takes precedence if defined (for preview logic), otherwise fall back to static prop
   const isRequired = forceRequired !== undefined ? forceRequired : required;
-
-  // Local state for value in preview mode to handle masking 'controlled' input behavior
   const [internalValue, setInternalValue] = useState('');
-  // Local state for focus tracking
   const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null);
 
-  // Execute Script in Preview Mode
   useEffect(() => {
-      if (preview && type === 'script' && scriptContent) {
+    if (preview && inputRef.current) {
+        if (error) {
+            inputRef.current.setCustomValidity(error);
+        } else if (customErrorMessage) {
+            inputRef.current.setCustomValidity(customErrorMessage);
+        } else {
+            inputRef.current.setCustomValidity('');
+        }
+    }
+  }, [preview, error, customErrorMessage]);
+
+  useEffect(() => {
+      if (preview && (type === 'script' || type === 'html-block' || type === 'htmlContent') && scriptContent) {
           try {
               const timer = setTimeout(() => {
                   const func = new Function(scriptContent);
@@ -95,25 +101,20 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       }
   }, [preview, type, scriptContent, label]);
 
-  // Style Logic Extraction
-  // We need to separate layout styles (applied to wrapper in Canvas) from appearance styles (applied to element here).
-  // If preview=true, we apply EVERYTHING here.
-  // If preview=false, layout styles are handled by Canvas wrapper, so we force width/height 100% to fill wrapper.
-  
   const getCombinedStyles = (isLayout: boolean): React.CSSProperties => {
       const s = styles || {};
       if (isLayout) {
           return {
               width: s.width,
               height: s.height,
+              minHeight: s.minHeight,
               gridColumn: s.gridColumn,
               gridRow: s.gridRow,
               flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined,
               flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
               flexBasis: s.flexBasis,
               alignSelf: s.alignSelf,
-              // Layout container props (if this element IS a container)
-              display: s.display, // block, flex, grid
+              display: s.display,
               flexDirection: s.flexDirection,
               justifyContent: s.justifyContent,
               alignItems: s.alignItems,
@@ -123,12 +124,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
               gap: s.gap,
           };
       } else {
-          // Appearance
           return {
               fontFamily: s.fontFamily === 'mono' ? 'monospace' : s.fontFamily === 'serif' ? 'serif' : 'inherit',
               fontWeight: s.fontWeight || 'normal',
+              fontSize: s.fontSize,
               backgroundColor: s.backgroundColor || 'transparent',
-              borderColor: isFocused && s.focusBorderColor ? s.focusBorderColor : s.borderColor,
+              borderColor: error ? '#ef4444' : (isFocused && s.focusBorderColor ? s.focusBorderColor : s.borderColor),
               borderWidth: s.borderWidth,
               borderRadius: s.borderRadius,
               padding: s.padding,
@@ -148,13 +149,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const containerStyle: React.CSSProperties = preview ? {
       ...layoutStyles,
       ...appearanceStyles,
-      position: 'relative' // Needed for offset calculations sometimes
+      position: 'relative'
   } : {
       ...appearanceStyles,
       width: '100%',
-      height: '100%', // Fill the canvas wrapper
-      // In edit mode, grid/flex item props are on the wrapper, so we ignore them here
-      display: layoutStyles.display, // But internal display (flex/grid) MUST be preserved if it's a container
+      height: '100%',
+      display: layoutStyles.display,
       flexDirection: layoutStyles.flexDirection,
       justifyContent: layoutStyles.justifyContent,
       alignItems: layoutStyles.alignItems,
@@ -164,30 +164,24 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       gap: layoutStyles.gap,
   };
 
-  // Special handling: If element is NOT a container type, 'display' prop in styles usually refers to container behavior. 
-  // Standard inputs (text, select) are block or inline-block. 
-  // We generally enforce block for inputs in this builder for simplicity, unless customized.
-  
   const currentSize = styles?.size || 'medium';
   const sizeClass = sizeClasses[currentSize];
   const disabledClass = disabled ? 'opacity-50 cursor-not-allowed' : '';
   const pointerEvents = preview ? '' : 'pointer-events-none';
   
-  // Input specific style (excludes container layout props)
   const inputStyle: React.CSSProperties = { 
       ...appearanceStyles, 
       width: '100%', 
-      height: type === 'container' || type === 'iframe' || type === 'image' ? '100%' : styles?.height 
+      height: type === 'container' || type === 'iframe' ? '100%' : styles?.height 
   }; 
   
-  // Masking Handler
   const handleMaskedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!inputMask) return;
-      
+      const mask = inputMask || element.inputMask;
+      if (!mask) return;
       const val = e.target.value;
-      const masked = applyMask(val, inputMask);
+      const masked = applyMask(val, mask);
       setInternalValue(masked);
-      e.target.value = masked; // force update
+      e.target.value = masked;
   };
 
   const handleFocus = () => setIsFocused(true);
@@ -196,8 +190,6 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       onStopEditing?.();
   };
 
-
-  // Handle input change for label editing
   const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onUpdate?.(id, { label: e.target.value });
   };
@@ -206,6 +198,17 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       onStopEditing?.();
       e.preventDefault();
     }
+  };
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+      if (preview && onClickScript) {
+          try {
+              const func = new Function(onClickScript);
+              func();
+          } catch (err) {
+              console.error(`Error executing onClick script for element ${label}:`, err);
+          }
+      }
   };
 
   const EditableLabel = ({ forCheckboxOrRadio = false }: { forCheckboxOrRadio?: boolean }) => {
@@ -226,17 +229,16 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         />
       );
     }
-    const labelText = `${label}${isRequired ? ' *' : ''}`;
     return (
       <span onDoubleClick={(e) => { if (!preview) { e.stopPropagation(); onStartEditing?.(id); } }}>
-        {labelText}
+        {label}
+        {isRequired && <span className="text-red-500 ml-1 font-bold" title="Required">*</span>}
       </span>
     );
   };
   
   const AccordionComponent = () => {
       const [isOpen, setIsOpen] = useState(true);
-      
       return (
         <div className="w-full border rounded-md overflow-hidden" style={containerStyle}>
             <button 
@@ -260,16 +262,17 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       );
   }
 
-  // News Card Logic
   const NewsCardComponent = () => {
       const [expanded, setExpanded] = useState(false);
-      const displayImage = (newsImage && newsImage.trim() !== '') ? newsImage : "https://via.placeholder.com/600x300?text=Latest+News";
+      const displayImage = newsImage || element.newsImage || (newsImage && newsImage.trim() !== '' ? newsImage : "https://via.placeholder.com/600x300?text=Latest+News");
+      const title = newsTitle || element.newsTitle || "News Title";
+      const content = newsContent || element.newsContent || "News Content";
       return (
           <div className={`border rounded-lg overflow-hidden shadow-sm bg-white ${pointerEvents}`} style={containerStyle}>
               <img src={displayImage} alt={newsTitle || "News"} className="w-full h-48 object-cover" />
               <div className="p-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{newsTitle}</h3>
-                  <div className={`text-gray-600 text-sm mb-4 transition-all ${expanded ? '' : 'line-clamp-2'}`}>{newsContent}</div>
+                  <h3 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{title}</h3>
+                  <div className={`text-gray-600 text-sm mb-4 transition-all ${expanded ? '' : 'line-clamp-2'}`}>{content}</div>
                    <button type="button" onClick={() => setExpanded(!expanded)} className="text-brand-primary text-sm font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-brand-primary rounded p-1">
                           {expanded ? 'Read Less' : 'Read More'}
                    </button>
@@ -278,7 +281,6 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       );
   };
   
-  // Shared props for validation and a11y
   const validationProps = {
       required: isRequired,
       minLength,
@@ -288,20 +290,24 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       step: step,
       pattern: pattern,
       'aria-required': isRequired,
-      'aria-invalid': false, 
-      title: customErrorMessage || (inputMask ? `Format: ${inputMask}` : undefined),
+      'aria-invalid': !!error,
+      title: error || customErrorMessage || (inputMask ? `Format: ${inputMask}` : undefined),
       onFocus: handleFocus,
       onBlur: handleBlur
   };
-  
-  if (customErrorMessage) {
-      // @ts-ignore
-      validationProps['data-custom-error'] = customErrorMessage;
-  }
 
-  switch (type) {
+  const commonInputClasses = `form-control w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary placeholder-gray-500 transition-colors ${pointerEvents} ${sizeClass} ${disabledClass} ${error ? 'border-red-500 ring-1 ring-red-500' : ''}`;
+
+  // Handle specialized types by mapping them to core types
+  const effectiveType = (['inputMask', 'text'].includes(type)) ? 'text' : 
+                        (['htmlContent', 'html-block'].includes(type)) ? 'html-block' : 
+                        (['newsTitle', 'newsContent', 'newsImage'].includes(type)) ? 'news-card' : 
+                        (['altText', 'typography'].includes(type)) ? 'typography' : 
+                        type;
+
+  switch (effectiveType) {
     case 'html-block':
-        return htmlContent || preview ? <div className="w-full" style={containerStyle} dangerouslySetInnerHTML={{ __html: htmlContent || '' }} /> : <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded">HTML Block</div>;
+        return (htmlContent || element.htmlContent) || preview ? <div className="w-full" style={containerStyle} dangerouslySetInnerHTML={{ __html: htmlContent || element.htmlContent || '' }} /> : <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded">HTML Block</div>;
     case 'divider':
         return <hr className="w-full border-t my-2" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} />;
     case 'image':
@@ -309,24 +315,22 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             <div className="w-full" style={containerStyle}>
                 <img 
                     src={src || "https://via.placeholder.com/300x200?text=Image+Placeholder"} 
-                    alt={altText || label} 
+                    alt={altText || element.altText || label} 
                     className={`max-w-full h-auto ${pointerEvents}`}
-                    style={{...appearanceStyles, width: '100%', height: '100%', objectFit: 'cover'}}
+                    style={{...appearanceStyles, width: '100%', height: styles?.height ? '100%' : 'auto', objectFit: 'cover'}}
                 />
             </div>
          );
     case 'typography':
-        const Tag = (headingLevel || 'p') as React.ElementType;
+        const Tag = (headingLevel || element.headingLevel || 'p') as React.ElementType;
         const textClasses = { h1: 'text-4xl font-bold mb-4', h2: 'text-3xl font-bold mb-3', h3: 'text-2xl font-bold mb-3', h4: 'text-xl font-bold mb-2', h5: 'text-lg font-bold mb-2', h6: 'text-base font-bold mb-2', p: 'text-base mb-2', span: 'text-base' };
-        return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[headingLevel || 'p']}`} style={appearanceStyles}>{textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
+        return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[Tag as keyof typeof textClasses] || 'text-base'}`} style={appearanceStyles}>{textContent || element.textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
     case 'script':
         if (preview) return null;
-        return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm">Script Element</div>;
+        return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm font-mono text-xs">Script: {label}</div>;
     case 'container':
-        // Default stack class only if display is not set or block. Increased spacing.
         const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-4' : '';
         const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-md min-h-[50px]';
-
         return (
             <div className={`w-full ${borderClass} ${defaultStackClass} p-4`} style={containerStyle}>
                 {!preview && <div className="mb-2"><label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label></div>}
@@ -339,14 +343,15 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
           <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
             type={subType || 'text'} 
             id={name} 
             name={name} 
             placeholder={placeholder} 
             disabled={disabled} 
             {...validationProps}
-            onChange={inputMask ? handleMaskedChange : undefined}
-            className={`w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${sizeClass} ${disabledClass}`} 
+            onChange={handleMaskedChange}
+            className={commonInputClasses} 
             style={inputStyle} 
           />
         </div>
@@ -355,14 +360,20 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <textarea id={name} name={name} placeholder={placeholder} rows={4} disabled={disabled} {...validationProps} className={`w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${sizeClass} ${disabledClass}`} style={inputStyle}></textarea>
+          <textarea 
+            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+            id={name} name={name} placeholder={placeholder} rows={4} disabled={disabled} {...validationProps} 
+            className={commonInputClasses} style={inputStyle}></textarea>
         </div>
       );
     case 'select':
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <select id={name} name={name} disabled={disabled} {...validationProps} className={`w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${sizeClass} ${disabledClass}`} style={inputStyle}>
+          <select 
+            ref={inputRef as React.RefObject<HTMLSelectElement>}
+            id={name} name={name} disabled={disabled} multiple={element.multiple} {...validationProps} 
+            className={commonInputClasses} style={inputStyle}>
             {options?.map((option, index) => <option key={index} value={option}>{option}</option>)}
           </select>
         </div>
@@ -370,7 +381,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'checkbox':
       return (
         <div className="flex items-center" style={containerStyle}>
-          <input id={name} name={name} type="checkbox" disabled={disabled} {...validationProps} className={`text-brand-primary border-gray-300 rounded focus:ring-brand-primary ${pointerEvents} ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} style={{...inputStyle, width: 'auto', height: 'auto'}} />
+          <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            id={name} name={name} type="checkbox" disabled={disabled} {...validationProps} 
+            className={`text-brand-primary border-gray-300 rounded focus:ring-brand-primary ${pointerEvents} ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} 
+            style={{...inputStyle, width: 'auto', height: 'auto'}} />
           <label htmlFor={name} className="ml-2 block text-sm text-gray-900"><EditableLabel forCheckboxOrRadio={true} /></label>
         </div>
       );
@@ -381,7 +396,10 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
           <div className={`${pointerEvents}`}>
             {options?.map((option, index) => (
               <div key={index} className="flex items-center mt-1">
-                <input id={`${name}-${index}`} name={name} type="radio" disabled={disabled} value={option} {...validationProps} className={`text-brand-primary border-gray-300 focus:ring-brand-primary ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} style={{...inputStyle, width: 'auto', height: 'auto'}} />
+                <input 
+                  id={`${name}-${index}`} name={name} type="radio" disabled={disabled} value={option} {...validationProps} 
+                  className={`text-brand-primary border-gray-300 focus:ring-brand-primary ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} 
+                  style={{...inputStyle, width: 'auto', height: 'auto'}} />
                 <label htmlFor={`${name}-${index}`} className="ml-2 block text-sm text-gray-900">{option}</label>
               </div>
             ))}
@@ -392,42 +410,56 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <input type="date" id={name} name={name} disabled={disabled} {...validationProps} className={`w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${sizeClass} ${disabledClass}`} style={inputStyle} />
+          <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="date" id={name} name={name} disabled={disabled} {...validationProps} 
+            className={commonInputClasses} style={inputStyle} />
         </div>
       );
     case 'number':
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <input type="number" id={name} name={name} placeholder={placeholder} disabled={disabled} {...validationProps} className={`w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${sizeClass} ${disabledClass}`} style={inputStyle} />
+          <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="number" id={name} name={name} placeholder={placeholder} disabled={disabled} {...validationProps} 
+            className={commonInputClasses} style={inputStyle} />
         </div>
       );
     case 'range':
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <input type="range" id={name} name={name} disabled={disabled} {...validationProps} className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${pointerEvents} ${disabledClass}`} />
+          <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="range" id={name} name={name} disabled={disabled} {...validationProps} 
+            className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${pointerEvents} ${disabledClass}`} />
         </div>
       );
     case 'file':
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <input type="file" id={name} name={name} disabled={disabled} {...validationProps} accept={element.accept} className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-brand-primary hover:file:bg-blue-100 ${pointerEvents} ${sizeClass.replace('px-3 py-2', '')} ${disabledClass}`} style={inputStyle} />
+          <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="file" id={name} name={name} disabled={disabled} {...validationProps} accept={element.accept} 
+            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-brand-primary hover:file:bg-blue-100 ${pointerEvents} ${sizeClass.replace('px-3 py-2', '')} ${disabledClass}`} style={inputStyle} />
         </div>
       );
     case 'color':
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <input type="color" id={name} name={name} disabled={disabled} className={`w-full h-10 border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${disabledClass}`} defaultValue="#0078D4" style={inputStyle} />
+          <input 
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="color" id={name} name={name} disabled={disabled} 
+            className={`w-full h-10 border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${disabledClass}`} defaultValue="#0078D4" style={inputStyle} />
         </div>
       );
     case 'button':
-      // Legacy color support map
       const buttonColorClasses: Record<string, string> = { primary: 'bg-brand-primary hover:bg-brand-accent text-white', secondary: 'bg-gray-600 hover:bg-gray-700 text-white', danger: 'bg-red-600 hover:bg-red-700 text-white' };
       const buttonClass = styles?.backgroundColor ? '' : buttonColorClasses[styles?.color || 'primary']; 
-      return <button type="button" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${buttonClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
+      return <button type="button" disabled={disabled} onClick={handleButtonClick} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${buttonClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
     case 'reset-button':
         return <button type="reset" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 bg-gray-200 hover:bg-gray-300 text-gray-800 ${sizeClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
     case 'table':

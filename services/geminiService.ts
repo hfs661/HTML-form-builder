@@ -6,7 +6,7 @@ if (!process.env.API_KEY) {
     console.warn("API_KEY environment variable not set. AI features will be disabled.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const responseSchema = {
     type: Type.ARRAY,
@@ -15,94 +15,114 @@ const responseSchema = {
       properties: {
         type: {
           type: Type.STRING,
-          description: "Type of the form field. Must be one of: 'text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar'.",
-          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar'],
+          description: "Type of the form field.",
+          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar', 'date', 'number', 'email', 'tel', 'typography', 'image', 'html-block', 'divider'],
         },
-        label: {
-          type: Type.STRING,
-          description: 'The user-visible label for the form field. Example: "Full Name"',
+        subType: {
+           type: Type.STRING,
+           enum: ['text', 'email', 'password', 'tel', 'url']
         },
-        name: {
-            type: Type.STRING,
-            description: "The HTML 'name' attribute for the field. Should be in camelCase. Example: 'fullName'",
-        },
-        placeholder: {
-          type: Type.STRING,
-          description: 'Placeholder text for text inputs or textareas. Example: "Enter your full name"',
-        },
+        label: { type: Type.STRING },
+        name: { type: Type.STRING },
+        placeholder: { type: Type.STRING },
         options: {
           type: Type.ARRAY,
-          items: {
-            type: Type.STRING,
-          },
-          description: "An array of string options for 'select' or 'radio' types. Example: ['Red', 'Green', 'Blue']",
+          items: { type: Type.STRING },
         },
-        required: {
-          type: Type.BOOLEAN,
-          description: 'Whether the field is required.'
-        }
+        required: { type: Type.BOOLEAN },
+        textContent: { type: Type.STRING, description: "Content for typography elements" },
+        headingLevel: { type: Type.STRING, description: "h1-h6 or p for typography" },
+        src: { type: Type.STRING, description: "Source URL for images" },
+        altText: { type: Type.STRING, description: "Alt text for images" }
       },
       required: ["type", "label", "name"],
-      propertyOrdering: ["type", "label", "name", "placeholder", "options", "required"],
     },
 };
 
-const styleResponseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        backgroundColor: { type: Type.STRING },
-        textColor: { type: Type.STRING },
-        borderColor: { type: Type.STRING },
-        borderWidth: { type: Type.STRING },
-        borderRadius: { type: Type.STRING },
-        padding: { type: Type.STRING },
-        fontFamily: { type: Type.STRING, enum: ['sans', 'serif', 'mono'] },
-        fontWeight: { type: Type.STRING, enum: ['normal', 'bold'] },
-        textAlign: { type: Type.STRING, enum: ['left', 'center', 'right', 'justify'] },
-        letterSpacing: { type: Type.STRING },
-        lineHeight: { type: Type.STRING },
-        textDecoration: { type: Type.STRING, enum: ['none', 'underline', 'line-through', 'overline'] },
-        boxShadow: { type: Type.STRING },
-        display: { type: Type.STRING },
-        flexDirection: { type: Type.STRING },
-        justifyContent: { type: Type.STRING },
-        alignItems: { type: Type.STRING },
-        gap: { type: Type.STRING },
-        gridTemplateColumns: { type: Type.STRING },
-        gridTemplateRows: { type: Type.STRING },
-        focusBorderColor: { type: Type.STRING },
-        focusBoxShadow: { type: Type.STRING }
-    },
-    required: [],
-    propertyOrdering: [
-        "backgroundColor", "textColor", "borderColor", "borderWidth", "borderRadius", "padding", 
-        "fontFamily", "fontWeight", "textAlign", "letterSpacing", "lineHeight", "textDecoration", "boxShadow",
-        "display", "flexDirection", "justifyContent", "alignItems", "gap", "gridTemplateColumns", "gridTemplateRows",
-        "focusBorderColor", "focusBoxShadow"
-    ]
+export const suggestContainerConfig = async (elements: FormElement[]): Promise<{ label: string, styles: ElementStyle }> => {
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
+    const childrenInfo = elements.map(el => `${el.type} (${el.label})`).join(", ");
+    
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `I have these form elements: [${childrenInfo}]. Suggest a professional container label and modern CSS styles (in JSON format) for a container holding them.`,
+        config: {
+            systemInstruction: "You are a UI/UX expert. Provide a JSON object with 'label' (string) and 'styles' (ElementStyle object). Elements often belong to 'Contact Info', 'Identity', 'Preferences', etc.",
+            responseMimeType: "application/json",
+            temperature: 0.4,
+        },
+    });
+
+    return JSON.parse(response.text);
 };
 
+export const getContentSuggestion = async (topic: string, targetType: string): Promise<any> => {
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
+    
+    let systemInstruction = "";
+    let schema: any = undefined;
+
+    if (targetType === 'news-card') {
+        systemInstruction = "You are a professional journalist. Generate a news title and content based on a topic.";
+        schema = {
+            type: Type.OBJECT,
+            properties: {
+                newsTitle: { type: Type.STRING },
+                newsContent: { type: Type.STRING },
+                altText: { type: Type.STRING }
+            },
+            required: ["newsTitle", "newsContent", "altText"]
+        };
+    } else if (targetType === 'typography' || targetType === 'headingLevel') {
+        systemInstruction = "You are a content writer. Suggest a catchy heading and identify the appropriate heading level (h1-h6).";
+        schema = {
+            type: Type.OBJECT,
+            properties: {
+                textContent: { type: Type.STRING },
+                headingLevel: { type: Type.STRING, enum: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p'] }
+            },
+            required: ["textContent", "headingLevel"]
+        };
+    } else if (targetType === 'image' || targetType === 'altText') {
+        systemInstruction = "Suggest a relevant alt text description for an image related to this topic.";
+        schema = {
+            type: Type.OBJECT,
+            properties: {
+                altText: { type: Type.STRING }
+            },
+            required: ["altText"]
+        };
+    }
+
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Topic: ${topic}`,
+        config: {
+            systemInstruction,
+            responseMimeType: "application/json",
+            responseSchema: schema,
+            temperature: 0.7,
+        },
+    });
+
+    return JSON.parse(response.text);
+};
 
 export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolean) => {
-    if (!process.env.API_KEY) {
-        throw new Error("API key is not configured.");
-    }
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
     try {
         if (useGoogleSearch) {
             const fullPrompt = `Based on the following description, generate a list of fields for an HTML form. Use Google Search to find relevant information and best practices for this type of form.
             Description: "${prompt}"
 
-            Your response must be ONLY a valid JSON array of objects. Do not include any text, explanation, or markdown backticks like \`\`\`json before or after the JSON array.
-            Each object represents a form field and must have the following properties:
-            - "type": (string) Must be one of: 'text', 'textarea', 'checkbox', 'radio', 'select', 'button'.
-            - "label": (string) The user-visible label for the form field.
-            - "name": (string) The HTML 'name' attribute, should be in camelCase.
-            - "placeholder": (string, optional) Placeholder text for inputs.
-            - "options": (array of strings, optional) For 'select' or 'radio' types.
-            - "required": (boolean, optional) Whether the field is required.`;
+            Your response must be ONLY a valid JSON array of objects. Do not include markdown backticks.
+            Properties: "type" (one of: text, textarea, checkbox, radio, select, button, date, number, typography, image, news-card, container, divider), "subType", "label", "name", "placeholder", "options", "required", "textContent", "headingLevel".`;
 
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-3-flash-preview",
                 contents: fullPrompt,
                 config: {
                     tools: [{googleSearch: {}}],
@@ -110,32 +130,14 @@ export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolea
                 },
             });
 
-            const text = response.text.trim();
-            let jsonString = text;
-            if (jsonString.startsWith('```json')) {
-                jsonString = jsonString.substring(7);
-            }
-            if (jsonString.endsWith('```')) {
-                jsonString = jsonString.substring(0, jsonString.length - 3);
-            }
-            
-            try {
-                const suggestions = JSON.parse(jsonString);
-                const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-                return { suggestions, sources };
-            } catch (e) {
-                console.error("Failed to parse JSON from AI response:", e);
-                console.error("Raw response text:", text);
-                throw new Error("AI returned an invalid response. Please try again or rephrase your prompt.");
-            }
-            
+            const text = response.text.trim().replace(/^```json/, "").replace(/```$/, "");
+            const suggestions = JSON.parse(text);
+            const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+            return { suggestions, sources };
         } else {
-            const fullPrompt = `Based on the following description, generate a list of fields for an HTML form.
-            Description: "${prompt}"`;
-            
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: fullPrompt,
+                model: "gemini-3-flash-preview",
+                contents: `Based on the following description, generate a list of fields for an HTML form: "${prompt}"`,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: responseSchema,
@@ -143,136 +145,66 @@ export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolea
                 },
             });
 
-            const jsonText = response.text.trim();
-            const suggestions = JSON.parse(jsonText);
-            return { suggestions, sources: null };
+            return { suggestions: JSON.parse(response.text), sources: null };
         }
-
     } catch (error) {
         console.error("Error fetching form suggestions:", error);
-        if (error instanceof Error) {
-            throw error;
-        }
-        throw new Error("Failed to get suggestions from AI. Please check the console for details.");
+        throw error;
     }
 };
 
-export const analyzeFormContext = async (elements: FormElement[]) => {
-    if (!process.env.API_KEY) {
-        throw new Error("API key is not configured.");
-    }
-    
-    // Create a simplified representation of the tree for the AI
-    const simplify = (list: FormElement[]): any[] => list.map(el => ({
-        type: el.type,
-        label: el.label,
-        name: el.name,
-        children: el.children ? simplify(el.children) : undefined
-    }));
-    
-    const structure = JSON.stringify(simplify(elements));
-    
-    try {
-        const fullPrompt = `Analyze the following HTML form structure and context:
-        ${structure}
-        
-        Identify missing standard fields, logical gaps, or UX improvements.
-        Generate a JSON list of NEW form elements that should be added to improve this form or complete it.
-        For example, if 'Shipping Address' exists, suggest 'Billing Address' fields.
-        
-        The 'type' property of suggested elements must be one of: 'text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar'.
-        `;
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: fullPrompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: responseSchema,
-                temperature: 0.3,
-            },
-        });
+export const getFormSuggestionsFromData = async (dataSummary: string) => {
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze the following dataset structure and generate a comprehensive HTML form to capture this data:\n${dataSummary}`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema,
+            temperature: 0.2,
+        },
+    });
+    return JSON.parse(response.text);
+}
 
-        const jsonText = response.text.trim();
-        const suggestions = JSON.parse(jsonText);
-        return suggestions;
-    } catch (error) {
-         console.error("Error analyzing form context:", error);
-         throw error;
-    }
+export const analyzeFormContext = async (elements: FormElement[]) => {
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
+    const structure = JSON.stringify(elements.map(el => ({ type: el.type, label: el.label, name: el.name })));
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Analyze form structure: ${structure}. Suggest improvements or missing fields in JSON format.`,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema,
+            temperature: 0.3,
+        },
+    });
+    return JSON.parse(response.text);
 };
 
 export const getStyleSuggestions = async (element: FormElement, stylePrompt?: string): Promise<ElementStyle> => {
-    if (!process.env.API_KEY) {
-        throw new Error("API key is not configured.");
-    }
-    try {
-        let fullPrompt = `Suggest modern CSS styles for a form element with the following properties:
-        Type: ${element.type}
-        Label: ${element.label}
-        Name: ${element.name}`;
-
-        if (stylePrompt) {
-            fullPrompt += `\n\nUser Style Request: "${stylePrompt}"\nPlease ensure the generated styles strictly match this request. 
-            If the user asks for focus states, provide values for 'focusBorderColor' and 'focusBoxShadow'.`;
-        } else {
-             fullPrompt += `\n\nProvide a JSON object with style properties that make this element look professional and modern.`;
-        }
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: fullPrompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: styleResponseSchema,
-                temperature: 0.5,
-            },
-        });
-
-        const jsonText = response.text.trim();
-        const styles = JSON.parse(jsonText);
-        return styles;
-    } catch (error) {
-         console.error("Error fetching style suggestions:", error);
-        throw error;
-    }
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Suggest modern CSS styles for ${element.type} "${element.label}". ${stylePrompt || ""}`,
+        config: {
+            responseMimeType: "application/json",
+            temperature: 0.5,
+        },
+    });
+    return JSON.parse(response.text);
 }
 
 export const getScriptSuggestions = async (prompt: string): Promise<string> => {
-    if (!process.env.API_KEY) {
-        throw new Error("API key is not configured.");
-    }
-    try {
-        const fullPrompt = `Write a JavaScript code snippet for a web form based on this request: "${prompt}".
-        
-        - The code should be plain JavaScript (ES6+).
-        - It should assume it runs in the browser.
-        - Use document.querySelector to target elements by their 'name' attribute (e.g., document.querySelector('input[name="myField"]')).
-        - Do not include any explanation or markdown formatting (no \`\`\`js). Just valid JavaScript code.
-        - Ensure event listeners are added safely (check if element exists).`;
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: fullPrompt,
-            config: {
-                temperature: 0.3,
-            },
-        });
-
-        let script = response.text.trim();
-        if (script.startsWith('```javascript')) {
-            script = script.substring(13);
-        } else if (script.startsWith('```js')) {
-            script = script.substring(5);
-        } else if (script.startsWith('```')) {
-            script = script.substring(3);
-        }
-        if (script.endsWith('```')) {
-            script = script.substring(0, script.length - 3);
-        }
-        return script.trim();
-    } catch (error) {
-         console.error("Error fetching script suggestions:", error);
-        throw error;
-    }
+    if (!process.env.API_KEY) throw new Error("API key is not configured.");
+    const ai = getAI();
+    const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview",
+        contents: `Write a JavaScript code snippet for a web form: "${prompt}". No explanations.`,
+        config: { temperature: 0.3 },
+    });
+    return response.text.trim().replace(/^```(javascript|js)?/, "").replace(/```$/, "");
 }

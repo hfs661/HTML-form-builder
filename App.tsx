@@ -1,12 +1,14 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Palette from './components/Palette';
 import Canvas from './components/Canvas';
 import PropertiesPanel from './components/PropertiesPanel';
 import CodeModal from './components/CodeModal';
 import PreviewModal from './components/PreviewModal';
 import ConfirmationDialog from './components/ConfirmationDialog';
-import type { FormElement } from './types';
+import ImportModal from './components/ImportModal';
+import PromptModal from './components/PromptModal';
+import type { FormElement, FormElementType, SnippetItem, ElementStyle } from './types';
 import { getFormSuggestions, analyzeFormContext } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -24,10 +26,13 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<FormElement[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  const [selectedElement, setSelectedElement] = useState<FormElement | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
+  const [generatedPrompt, setGeneratedPrompt] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [suggestedElements, setSuggestedElements] = useState<Partial<FormElement>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,25 +40,22 @@ const App: React.FC = () => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [useGoogleSearch, setUseGoogleSearch] = useState(false);
   const [searchSources, setSearchSources] = useState<any[] | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  // Initialize history with initial state if valid
+  // Initialize history
   useEffect(() => {
       if (history.length === 1 && history[0].length === 0 && formElements.length > 0) {
           setHistory([formElements]);
       }
   }, []);
 
-  // Helper to update state and push to history
   const updateFormElementsWithHistory = (newElements: FormElement[] | ((prev: FormElement[]) => FormElement[])) => {
     setFormElements(prev => {
         const resolvedElements = typeof newElements === 'function' ? newElements(prev) : newElements;
-        
-        // Avoid duplicates in history
         const currentHistory = history.slice(0, historyIndex + 1);
         const nextHistory = [...currentHistory, resolvedElements];
         setHistory(nextHistory);
         setHistoryIndex(nextHistory.length - 1);
-        
         return resolvedElements;
     });
   };
@@ -63,7 +65,7 @@ const App: React.FC = () => {
           const prevIndex = historyIndex - 1;
           setFormElements(history[prevIndex]);
           setHistoryIndex(prevIndex);
-          setSelectedElement(null);
+          setSelectedIds([]);
       }
   };
 
@@ -72,33 +74,59 @@ const App: React.FC = () => {
           const nextIndex = historyIndex + 1;
           setFormElements(history[nextIndex]);
           setHistoryIndex(nextIndex);
-          setSelectedElement(null);
+          setSelectedIds([]);
       }
   };
 
-
-  // Save form elements to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('formBuilderElements', JSON.stringify(formElements));
   }, [formElements]);
 
-  // Recursive update helper for deep updates
+  const handleSaveDraft = () => {
+      setSaveStatus('saving');
+      localStorage.setItem('formBuilderElements', JSON.stringify(formElements));
+      setTimeout(() => {
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2000);
+      }, 500);
+  };
+
+  const handleClearAll = () => {
+    setFormElements([]);
+    setSuggestedElements([]);
+    setHistory([[]]);
+    setHistoryIndex(0);
+    setSelectedIds([]);
+    setShowClearConfirm(false);
+    setError(null);
+    setSearchSources(null);
+  };
+
+  const handleGetSuggestions = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsLoading(true);
+    setError(null);
+    setSearchSources(null);
+    try {
+      const result = await getFormSuggestions(aiPrompt, useGoogleSearch);
+      setSuggestedElements(result.suggestions);
+      setSearchSources(result.sources || null);
+    } catch (err: any) {
+      setError(err.message || "An error occurred while getting suggestions.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const recursiveUpdateElement = (list: FormElement[], id: string, updatedProps: Partial<FormElement>): FormElement[] => {
       return list.map(el => {
           if (el.id === id) {
               const newProps = { ...updatedProps };
-              // Deep merge styles if present
-              if (updatedProps.styles && el.styles) {
-                  newProps.styles = { ...el.styles, ...updatedProps.styles };
-              }
-              // Deep merge logic if present
-              if (updatedProps.logic && el.logic) {
-                  newProps.logic = { ...el.logic, ...updatedProps.logic };
-              }
-              // Deep merge validationLogic if present
-               if (updatedProps.validationLogic && el.validationLogic) {
-                  newProps.validationLogic = { ...el.validationLogic, ...updatedProps.validationLogic };
-              }
+              if (updatedProps.styles && el.styles) newProps.styles = { ...el.styles, ...updatedProps.styles };
+              if (updatedProps.logic && el.logic) newProps.logic = { ...el.logic, ...updatedProps.logic };
+              if (updatedProps.validationLogic && el.validationLogic) newProps.validationLogic = { ...el.validationLogic, ...updatedProps.validationLogic };
+              if (updatedProps.dataLogic && el.dataLogic) newProps.dataLogic = { ...el.dataLogic, ...updatedProps.dataLogic };
               return { ...el, ...newProps };
           }
           if (el.children) return { ...el, children: recursiveUpdateElement(el.children, id, updatedProps) };
@@ -107,65 +135,178 @@ const App: React.FC = () => {
   };
 
   const updateElement = useCallback((id: string, updatedProps: Partial<FormElement>) => {
-    updateFormElementsWithHistory((prev) => {
-        const updated = recursiveUpdateElement(prev, id, updatedProps);
-        // Find the updated element to refresh selectedElement state properly
-        // We can't just merge updatedProps into selectedElement because selectedElement might be stale or updatedProps might be partial
-        // However, for UI responsiveness, we usually assume success.
-        // Better: Find the element in the updated tree.
-        const findElement = (list: FormElement[]): FormElement | undefined => {
-            for(const el of list) {
-                if(el.id === id) return el;
-                if(el.children) {
-                    const found = findElement(el.children);
-                    if(found) return found;
-                }
-            }
-        };
-        const newSelected = findElement(updated);
-        if (newSelected && selectedElement && selectedElement.id === id) {
-            setSelectedElement(newSelected);
-        }
-        return updated;
-    });
-  }, [history, historyIndex, selectedElement]); 
+    updateFormElementsWithHistory((prev) => recursiveUpdateElement(prev, id, updatedProps));
+  }, [historyIndex]);
 
-  // Helper to deep clone element with new IDs
   const deepCloneWithNewIds = (element: FormElement): FormElement => {
       const newId = `${element.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const newChildren = element.children ? element.children.map(deepCloneWithNewIds) : undefined;
       return {
           ...element,
           id: newId,
-          name: `${element.name}_copy`, // Basic rename to avoid duplicates
+          name: `${element.name}_copy`,
           children: newChildren
       };
   };
 
   const duplicateElement = useCallback((id: string) => {
       updateFormElementsWithHistory(prev => {
-          // Recursive finder and inserter
           const insertAfter = (list: FormElement[]): FormElement[] => {
               const idx = list.findIndex(el => el.id === id);
               if (idx !== -1) {
-                  const original = list[idx];
-                  const copy = deepCloneWithNewIds(original);
+                  const copy = deepCloneWithNewIds(list[idx]);
                   const newList = [...list];
                   newList.splice(idx + 1, 0, copy);
                   return newList;
               }
-              // If not found in this level, map children
-              return list.map(el => {
-                  if (el.children) {
-                      return { ...el, children: insertAfter(el.children) };
-                  }
-                  return el;
-              });
+              return list.map(el => el.children ? { ...el, children: insertAfter(el.children) } : el);
           };
           return insertAfter(prev);
       });
-  }, [history, historyIndex]);
+  }, [historyIndex]);
 
+  const handleGroupElements = () => {
+    if (selectedIds.length < 1) return;
+    
+    updateFormElementsWithHistory(prev => {
+        let removedItems: FormElement[] = [];
+        const findAndRemove = (list: FormElement[]): FormElement[] => {
+            return list.filter(item => {
+                if (selectedIds.includes(item.id)) {
+                    removedItems.push(item);
+                    return false;
+                }
+                return true;
+            }).map(item => item.children ? { ...item, children: findAndRemove(item.children) } : item);
+        };
+
+        const newTree = findAndRemove(prev);
+        const newContainer: FormElement = {
+            id: `container-${Date.now()}`,
+            type: 'container',
+            label: 'Grouped Container',
+            name: `group_${Date.now()}`,
+            styles: { padding: '16px', gap: '16px', display: 'flex', flexDirection: 'column', borderWidth: '1px', borderStyle: 'dashed', borderColor: '#ccc' },
+            children: removedItems
+        };
+
+        return [...newTree, newContainer];
+    });
+    setSelectedIds([]);
+  };
+
+  const handleGroupWithAI = (label: string, styles: ElementStyle) => {
+    if (selectedIds.length < 1) return;
+    
+    updateFormElementsWithHistory(prev => {
+        let removedItems: FormElement[] = [];
+        const findAndRemove = (list: FormElement[]): FormElement[] => {
+            return list.filter(item => {
+                if (selectedIds.includes(item.id)) {
+                    removedItems.push(item);
+                    return false;
+                }
+                return true;
+            }).map(item => item.children ? { ...item, children: findAndRemove(item.children) } : item);
+        };
+
+        const newTree = findAndRemove(prev);
+        const newContainer: FormElement = {
+            id: `container-${Date.now()}`,
+            type: 'container',
+            label: label,
+            name: `ai_group_${Date.now()}`,
+            styles: { padding: '24px', gap: '16px', display: 'flex', flexDirection: 'column', ...styles },
+            children: removedItems
+        };
+
+        return [...newTree, newContainer];
+    });
+    setSelectedIds([]);
+  };
+
+  const handleSaveAsTemplate = () => {
+    if (selectedIds.length === 0) return;
+    
+    const selectedElements: FormElement[] = [];
+    const findSelected = (list: FormElement[]) => {
+      list.forEach(el => {
+        if (selectedIds.includes(el.id)) selectedElements.push(el);
+        if (el.children) findSelected(el.children);
+      });
+    };
+    findSelected(formElements);
+
+    if (selectedElements.length === 0) return;
+
+    const templateName = prompt("Enter a name for your template:", "My Reusable Component");
+    if (!templateName) return;
+
+    const newTemplate: SnippetItem = {
+      id: `template-${Date.now()}`,
+      label: templateName,
+      elements: selectedElements.map(el => {
+        const stripIds = (item: FormElement): any => {
+          const { id, ...rest } = item;
+          if (rest.children) rest.children = rest.children.map(stripIds);
+          return rest;
+        };
+        return stripIds(el);
+      })
+    };
+
+    const saved = localStorage.getItem('formBuilderTemplates');
+    const templates = saved ? JSON.parse(saved) : [];
+    const updated = [...templates, newTemplate];
+    localStorage.setItem('formBuilderTemplates', JSON.stringify(updated));
+    
+    window.dispatchEvent(new Event('templatesUpdated'));
+    alert("Template saved to 'My Templates'!");
+  };
+
+  const selectedElement = useMemo(() => {
+      if (selectedIds.length !== 1) return null;
+      const find = (list: FormElement[]): FormElement | null => {
+          for (const el of list) {
+              if (el.id === selectedIds[0]) return el;
+              if (el.children) {
+                  const found = find(el.children);
+                  if (found) return found;
+              }
+          }
+          return null;
+      };
+      return find(formElements);
+  }, [selectedIds, formElements]);
+
+  const generatePrompt = (elements: FormElement[]): string => {
+    let prompt = "Create a complete, responsive, and accessible HTML/CSS form based on the following detailed specifications. Use Tailwind CSS for styling.\n\n### Form Structure:\n";
+    
+    const describeElement = (el: FormElement, depth: number = 0, index: number): string => {
+      const indent = "  ".repeat(depth);
+      let desc = `${indent}${index + 1}. **${el.label}** (${el.type})`;
+      
+      const details = [];
+      if (el.name) details.push(`name="${el.name}"`);
+      if (el.placeholder) details.push(`placeholder="${el.placeholder}"`);
+      if (el.required) details.push(`required`);
+      if (el.subType) details.push(`type="${el.subType}"`);
+      if (el.options) details.push(`options=[${el.options.join(', ')}]`);
+      if (el.htmlContent) details.push(`content="Custom HTML Block"`);
+      
+      if (details.length > 0) desc += ` - [${details.join(', ')}]`;
+      
+      if (el.children && el.children.length > 0) {
+        desc += `\n${indent}   *Container Contents:*`;
+        desc += "\n" + el.children.map((c, i) => describeElement(c, depth + 1, i)).join("\n");
+      }
+      return desc;
+    };
+  
+    prompt += elements.map((e, i) => describeElement(e, 0, i)).join("\n");
+    prompt += "\n\n### Requirements:\n- Use semantic HTML tags.\n- Ensure high accessibility contrast.\n- Include form validation logic matching the 'required' and type attributes.\n- Layout should be clean and modern.";
+    return prompt;
+  };
 
   const generateHTML = (elements: FormElement[]) => {
       const lines: string[] = [];
@@ -173,20 +314,14 @@ const App: React.FC = () => {
       
       elements.forEach(el => {
           if (el.type === 'script') {
-              if (el.scriptContent) {
-                 lines.push(`  <script>\n    ${el.scriptContent.replace(/\n/g, '\n    ')}\n  </script>`);
-              }
+              if (el.scriptContent) lines.push(`  <script>\n    ${el.scriptContent.replace(/\n/g, '\n    ')}\n  </script>`);
               return;
           }
-          
-          if (el.type === 'html-block') {
-              if (el.htmlContent) {
-                  lines.push(`  ${el.htmlContent}`);
-              }
+          if (el.type === 'html-block' || el.type === 'htmlContent') {
+              if (el.htmlContent) lines.push(`  ${el.htmlContent}`);
               return;
           }
 
-          // Simple Style String generator
           const getStyleString = (s: any) => {
               if(!s) return '';
               const styles = [];
@@ -194,6 +329,7 @@ const App: React.FC = () => {
               if(s.textColor) styles.push(`color: ${s.textColor}`);
               if(s.borderColor) styles.push(`border-color: ${s.borderColor}`);
               if(s.borderWidth) styles.push(`border-width: ${s.borderWidth}`);
+              if(s.borderStyle) styles.push(`border-style: ${s.borderStyle}`);
               if(s.borderRadius) styles.push(`border-radius: ${s.borderRadius}`);
               if(s.padding) styles.push(`padding: ${s.padding}`);
               if(s.fontFamily) styles.push(`font-family: ${s.fontFamily}`);
@@ -201,24 +337,13 @@ const App: React.FC = () => {
               if(s.height) styles.push(`height: ${s.height}`);
               if(s.width) styles.push(`width: ${s.width}`);
               if(s.textAlign) styles.push(`text-align: ${s.textAlign}`);
-              if(s.letterSpacing) styles.push(`letter-spacing: ${s.letterSpacing}`);
-              if(s.lineHeight) styles.push(`line-height: ${s.lineHeight}`);
-              if(s.textDecoration) styles.push(`text-decoration: ${s.textDecoration}`);
-              if(s.boxShadow) styles.push(`box-shadow: ${s.boxShadow}`);
-              
-              // Grid/Flex Item props
-              if(s.gridColumn) styles.push(`grid-column: ${s.gridColumn}`);
-              if(s.gridRow) styles.push(`grid-row: ${s.gridRow}`);
-              if(s.flexGrow) styles.push(`flex-grow: ${s.flexGrow}`);
-              if(s.flexShrink) styles.push(`flex-shrink: ${s.flexShrink}`);
-              if(s.flexBasis) styles.push(`flex-basis: ${s.flexBasis}`);
-              if(s.alignSelf) styles.push(`align-self: ${s.alignSelf}`);
-
-              // Grid Container props
               if(s.display === 'grid') {
                   styles.push('display: grid');
                   if(s.gridTemplateColumns) styles.push(`grid-template-columns: ${s.gridTemplateColumns}`);
-                  if(s.gridTemplateRows) styles.push(`grid-template-rows: ${s.gridTemplateRows}`);
+                  if(s.gap) styles.push(`gap: ${s.gap}`);
+              } else if (s.display === 'flex') {
+                  styles.push('display: flex');
+                  if(s.flexDirection) styles.push(`flex-direction: ${s.flexDirection}`);
                   if(s.gap) styles.push(`gap: ${s.gap}`);
               }
               return styles.length > 0 ? `style="${styles.join('; ')}"` : '';
@@ -226,33 +351,8 @@ const App: React.FC = () => {
           const styleStr = getStyleString(el.styles);
 
           if (el.type === 'container') {
-              // Handle flexbox styles for container content
-              const s = el.styles || {};
-              const layoutStyles = [];
-              if (s.display === 'flex') {
-                  layoutStyles.push('display: flex');
-                  if(s.flexDirection) layoutStyles.push(`flex-direction: ${s.flexDirection}`);
-                  if(s.justifyContent) layoutStyles.push(`justify-content: ${s.justifyContent}`);
-                  if(s.alignItems) layoutStyles.push(`align-items: ${s.alignItems}`);
-                  if(s.gap) layoutStyles.push(`gap: ${s.gap}`);
-                  if(s.flexWrap) layoutStyles.push(`flex-wrap: ${s.flexWrap}`);
-              } else if (s.display === 'grid') {
-                  layoutStyles.push('display: grid');
-                  if(s.gridTemplateColumns) layoutStyles.push(`grid-template-columns: ${s.gridTemplateColumns}`);
-                  if(s.gridTemplateRows) layoutStyles.push(`grid-template-rows: ${s.gridTemplateRows}`);
-                  if(s.gap) layoutStyles.push(`gap: ${s.gap}`);
-              }
-              
-              const layoutStyleStr = layoutStyles.length > 0 ? `style="${layoutStyles.join('; ')}"` : '';
-              const wrapperClass = (!s.display || s.display === 'block') ? 'space-y-4' : '';
-
-              // For HTML generation, we typically want the container to be the layout wrapper.
-              // In our recursive edit mode, we had wrappers. Here we flatten it a bit.
-              
-              lines.push(`  <div class="container-element ${wrapperClass}" ${styleStr} ${layoutStyleStr}>`);
-              if (el.children) {
-                  lines.push(generateHTML(el.children));
-              }
+              lines.push(`  <div class="container-element" ${styleStr}>`);
+              if (el.children) lines.push(generateHTML(el.children));
               lines.push('  </div>');
               return;
           }
@@ -261,46 +361,22 @@ const App: React.FC = () => {
               lines.push(`  <details class="accordion-wrapper" ${styleStr}>`);
               lines.push(`    <summary class="cursor-pointer font-bold p-2 bg-gray-50 border border-b-0">${el.label}</summary>`);
               lines.push(`    <div class="accordion-content border p-2">`);
-              if (el.children) {
-                  lines.push(generateHTML(el.children));
-              }
+              if (el.children) lines.push(generateHTML(el.children));
               lines.push('    </div>');
               lines.push('  </details>');
               return;
           }
-          
-          if (el.type === 'typography') {
-              const Tag = el.headingLevel || 'p';
-              lines.push(`  <${Tag} ${styleStr}>${el.textContent || ''}</${Tag}>`);
-              return;
-          }
-          
-          if (el.type === 'divider') {
-              lines.push(`  <hr class="my-2" ${styleStr} />`);
-              return;
-          }
-          
-          if (el.type === 'image') {
-              lines.push(`  <div class="w-full"><img src="${el.src || ''}" alt="${el.altText || ''}" class="max-w-full h-auto" ${styleStr} /></div>`);
-              return;
+
+          if (!['button', 'reset-button', 'news-card', 'iframe', 'navbar', 'container', 'html-block', 'htmlContent', 'typography', 'divider', 'image', 'accordion'].includes(el.type)) {
+              lines.push(`  <div class="form-group mb-4" ${styleStr}>`);
+              lines.push(`    <label for="${el.name}" class="block text-sm font-medium text-gray-700">${el.label}${el.required ? ' *' : ''}</label>`);
+          } else {
+              lines.push(`  <div class="form-group mb-4" ${styleStr}>`);
           }
 
-          // Start field wrapper
-          lines.push(`  <div class="form-group" ${styleStr}>`);
-          
-          // Label
-          if (!['button', 'reset-button', 'news-card', 'iframe', 'navbar', 'container', 'html-block', 'typography', 'divider', 'image', 'accordion'].includes(el.type)) {
-              lines.push(`    <label for="${el.name}" class="block text-sm font-medium text-gray-700">${el.label}${el.required ? ' *' : ''}</label>`);
-          }
-          
-          // Element
           let fieldHtml = '';
           const requiredAttr = el.required ? 'required' : '';
           const disabledAttr = el.disabled ? 'disabled' : '';
-          const errorAttr = el.customErrorMessage ? `data-error-message="${el.customErrorMessage}"` : '';
-          
-          // Inner style (stripping layout props for inner input if needed, but for simple HTML gen, reusing styleStr on wrapper is often safer for layout, and input gets width:100%)
-          const inputStyleStr = 'style="width: 100%"';
 
           switch (el.type) {
               case 'text':
@@ -309,20 +385,14 @@ const App: React.FC = () => {
               case 'color':
               case 'file':
               case 'range':
-                  fieldHtml = `    <input type="${el.subType || el.type}" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${inputStyleStr} />`;
+                  fieldHtml = `    <input type="${el.subType || el.type}" id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} />`;
                   break;
               case 'textarea':
-                  fieldHtml = `    <textarea id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" rows="4" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${inputStyleStr}></textarea>`;
+                  fieldHtml = `    <textarea id="${el.name}" name="${el.name}" placeholder="${el.placeholder || ''}" rows="4" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr}></textarea>`;
                   break;
               case 'select':
                   const optionsHtml = el.options?.map(opt => `<option value="${opt}">${opt}</option>`).join('') || '';
-                  fieldHtml = `    <select id="${el.name}" name="${el.name}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${errorAttr} ${inputStyleStr}>${optionsHtml}</select>`;
-                  break;
-              case 'checkbox':
-                  fieldHtml = `    <div class="flex items-center"><input type="checkbox" id="${el.name}" name="${el.name}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} /><label for="${el.name}">${el.label}</label></div>`;
-                  break;
-              case 'radio':
-                  fieldHtml = el.options?.map(opt => `    <div class="flex items-center"><input type="radio" name="${el.name}" value="${opt}" class="mr-2" ${requiredAttr} ${disabledAttr} ${errorAttr} /><label>${opt}</label></div>`).join('\n') || '';
+                  fieldHtml = `    <select id="${el.name}" name="${el.name}" class="form-control block w-full border rounded-md p-2" ${requiredAttr} ${disabledAttr} ${el.multiple ? 'multiple' : ''}>${optionsHtml}</select>`;
                   break;
               case 'button':
                   fieldHtml = `    <button type="button" class="px-4 py-2 bg-blue-600 text-white rounded-md" ${disabledAttr}>${el.label}</button>`;
@@ -330,78 +400,14 @@ const App: React.FC = () => {
               case 'reset-button':
                   fieldHtml = `    <button type="reset" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md" ${disabledAttr}>${el.label}</button>`;
                   break;
-              case 'iframe':
-                  fieldHtml = `    <iframe src="${el.src || 'about:blank'}" title="${el.label}" class="w-full border" style="height: 300px"></iframe>`;
-                  break;
               default:
-                  fieldHtml = `    <!-- Element type ${el.type} generation not fully supported yet -->`;
+                  fieldHtml = `    <!-- Element type ${el.type} -->`;
           }
-          
           lines.push(fieldHtml);
           lines.push('  </div>');
       });
-      
       if (elements === formElements) lines.push('</form>');
       return lines.join('\n');
-  };
-
-  const generateCode = () => {
-    const code = generateHTML(formElements);
-    setGeneratedCode(code);
-    setShowCodeModal(true);
-  };
-  
-  const handleQuickCopy = () => {
-      const code = generateHTML(formElements);
-      navigator.clipboard.writeText(code);
-      alert('HTML Code copied to clipboard!');
-  };
-  
-  const handleGetSuggestions = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsLoading(true);
-    setError(null);
-    setSuggestedElements([]);
-    setSearchSources(null);
-    try {
-        const { suggestions, sources } = await getFormSuggestions(aiPrompt, useGoogleSearch);
-        setSuggestedElements(suggestions);
-        if (sources) {
-            setSearchSources(sources);
-        }
-    } catch(err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-    } finally {
-        setIsLoading(false);
-    }
-  };
-  
-  const handleSmartSuggestions = async () => {
-      setIsLoading(true);
-      setError(null);
-      setSuggestedElements([]);
-      try {
-          const suggestions = await analyzeFormContext(formElements);
-          setSuggestedElements(suggestions);
-      } catch(err) {
-           setError(err instanceof Error ? err.message : 'Failed to analyze form.');
-      } finally {
-          setIsLoading(false);
-      }
-  };
-
-  const handleClearAll = () => {
-    updateFormElementsWithHistory([]);
-    setSelectedElement(null);
-    setSuggestedElements([]);
-    setAiPrompt('');
-    setShowClearConfirm(false);
-    setUseGoogleSearch(false);
-    setSearchSources(null);
-  };
-  
-  const handleClearSuggestions = () => {
-    setSuggestedElements([]);
   };
 
   return (
@@ -410,151 +416,88 @@ const App: React.FC = () => {
         <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold">Power Form Builder AI</h1>
             <div className="flex space-x-1 bg-brand-accent rounded-md p-1">
-                <button onClick={handleUndo} disabled={historyIndex === 0} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Undo">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg>
-                </button>
-                <button onClick={handleRedo} disabled={historyIndex === history.length - 1} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Redo">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                </button>
+                <button onClick={handleUndo} disabled={historyIndex === 0} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Undo"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg></button>
+                <button onClick={handleRedo} disabled={historyIndex === history.length - 1} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Redo"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
             </div>
         </div>
         <div className="flex items-center space-x-2">
-           <button
-            onClick={() => setShowPreviewModal(true)}
-            disabled={formElements.length === 0}
-            className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center"
-          >
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-            </svg>
-            Preview
-          </button>
-           <button
-            onClick={() => setShowClearConfirm(true)}
-            disabled={formElements.length === 0 && suggestedElements.length === 0 && aiPrompt.trim() === ''}
-            className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md shadow-sm hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            Clear All
-          </button>
-          <div className="relative group flex">
-            <button
-                onClick={handleQuickCopy}
-                disabled={formElements.length === 0}
-                className="px-4 py-2 bg-gray-100 text-brand-primary font-semibold rounded-l-md border-r border-gray-300 hover:bg-gray-200 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center"
-                title="Quick Copy to Clipboard"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
-                Copy to Clipboard
-            </button>
-            <button
-                onClick={generateCode}
-                disabled={formElements.length === 0}
-                className="px-4 py-2 bg-white text-brand-primary font-semibold rounded-r-md shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-                Generate Code
-            </button>
-          </div>
+           {selectedIds.length > 0 && (
+               <div className="flex space-x-1 bg-white/10 p-1 rounded-md animate-pulse shadow-inner">
+                 <button onClick={handleGroupElements} className="px-3 py-1.5 bg-indigo-500 text-white text-xs font-bold rounded shadow-sm hover:bg-indigo-600 transition-colors flex items-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                     Group
+                 </button>
+                 <button onClick={handleSaveAsTemplate} className="px-3 py-1.5 bg-yellow-600 text-white text-xs font-bold rounded shadow-sm hover:bg-yellow-700 transition-colors flex items-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                     Template
+                 </button>
+               </div>
+           )}
+           <button onClick={handleSaveDraft} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md shadow-sm hover:bg-green-700 transition-colors flex items-center">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+               {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save Draft'}
+           </button>
+           <button onClick={() => setShowImportModal(true)} className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 flex items-center transition-colors">
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+             Import
+           </button>
+           <button onClick={() => setShowPreviewModal(true)} disabled={formElements.length === 0} className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center">
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
+             Preview
+           </button>
+           <button onClick={() => { setGeneratedPrompt(generatePrompt(formElements)); setShowPromptModal(true); }} disabled={formElements.length === 0} className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-md shadow-sm hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
+               AI Prompt
+           </button>
+           <button onClick={() => setShowClearConfirm(true)} disabled={formElements.length === 0} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md shadow-sm hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">Clear</button>
+           <button onClick={() => { setGeneratedCode(generateHTML(formElements)); setShowCodeModal(true); }} disabled={formElements.length === 0} className="px-4 py-2 bg-white text-brand-primary font-semibold rounded-md shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">Code</button>
         </div>
       </header>
        <div className="p-3 bg-brand-secondary border-b border-gray-300">
-            <div className="max-w-3xl mx-auto">
-                <div className="flex flex-col sm:flex-row items-center sm:space-x-2">
-                    <input
-                        type="text"
-                        value={aiPrompt}
-                        onChange={(e) => setAiPrompt(e.target.value)}
-                        placeholder="Describe your form, e.g., 'A user registration form with name, email, and password'"
-                        className="flex-grow p-2 w-full border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
-                        disabled={isLoading}
-                    />
-                    <div className="flex items-stretch space-x-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                        <button
-                            onClick={handleGetSuggestions}
-                            disabled={isLoading || !aiPrompt.trim()}
-                            className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex-grow sm:flex-grow-0"
-                        >
-                            {isLoading ? 'Thinking...' : 'Get Suggestions'}
-                        </button>
-                         <button
-                            onClick={handleSmartSuggestions}
-                            disabled={isLoading}
-                            className="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-sm hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center whitespace-nowrap"
-                            title="Analyze current form and suggest missing fields"
-                        >
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                            </svg>
-                            Analyze Form
-                        </button>
-                    </div>
+            <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center sm:space-x-2">
+                <input type="text" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Describe your form, e.g., 'A user registration form...'" className="flex-grow p-2 w-full border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary" disabled={isLoading} />
+                <button onClick={handleGetSuggestions} disabled={isLoading || !aiPrompt.trim()} className="mt-2 sm:mt-0 px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">{isLoading ? 'Thinking...' : 'AI Suggest'}</button>
+                <div className="flex items-center space-x-2 mt-2 sm:mt-0 px-4">
+                  <input 
+                    type="checkbox" 
+                    id="search-toggle" 
+                    checked={useGoogleSearch} 
+                    onChange={(e) => setUseGoogleSearch(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary cursor-pointer"
+                  />
+                  <label htmlFor="search-toggle" className="text-xs font-bold text-brand-text uppercase tracking-tight cursor-pointer select-none">Web Search</label>
                 </div>
-                 <div className="flex items-center justify-end mt-2">
-                        <div 
-                            title="Use Google Search for more relevant and up-to-date suggestions"
-                            className="flex items-center p-1 rounded-md bg-transparent"
-                        >
-                            <input
-                                type="checkbox"
-                                id="useGoogleSearch"
-                                checked={useGoogleSearch}
-                                onChange={(e) => setUseGoogleSearch(e.target.checked)}
-                                className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary"
-                            />
-                            <label htmlFor="useGoogleSearch" className="ml-2 text-sm text-gray-700 select-none cursor-pointer">
-                                Use Google Search for Suggestions
-                            </label>
-                        </div>
-                </div>
-
-                {error && <p className="text-red-500 text-center mt-2">{error}</p>}
-                {searchSources && searchSources.length > 0 && (
-                    <div className="mt-4 text-sm p-3 bg-blue-50 border border-blue-200 rounded-md">
-                        <h4 className="font-semibold text-blue-800">Sources from Google Search:</h4>
-                        <ul className="list-disc list-inside mt-1 space-y-1">
-                            {searchSources.filter(s => s.web && s.web.uri).map((source, index) => (
-                                <li key={index}>
-                                    <a href={source.web.uri} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">
-                                        {source.web.title || source.web.uri}
-                                    </a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
             </div>
         </div>
+        {error && (
+            <div className="bg-red-50 p-3 text-center text-red-700 text-sm font-medium border-b border-red-200">
+                {error}
+            </div>
+        )}
       <main className="flex flex-grow overflow-hidden">
-        <Palette suggestedElements={suggestedElements} onClearSuggestions={handleClearSuggestions} />
+        <Palette suggestedElements={suggestedElements} onClearSuggestions={() => setSuggestedElements([])} />
         <Canvas 
           elements={formElements} 
           setElements={updateFormElementsWithHistory} 
-          setSelectedElement={setSelectedElement} 
-          selectedElement={selectedElement}
+          setSelectedIds={setSelectedIds} 
+          selectedIds={selectedIds}
           updateElement={updateElement}
         />
         <PropertiesPanel 
             selectedElement={selectedElement} 
+            selectedIds={selectedIds}
             updateElement={updateElement} 
-            closePanel={() => setSelectedElement(null)} 
+            closePanel={() => setSelectedIds([])} 
             allElements={formElements}
             onDuplicate={duplicateElement}
+            onGroup={handleGroupElements}
+            onGroupWithAI={handleGroupWithAI}
         />
       </main>
-
-      <ConfirmationDialog
-        isOpen={showClearConfirm}
-        onClose={() => setShowClearConfirm(false)}
-        onConfirm={handleClearAll}
-        title="Clear All"
-        message="Are you sure you want to clear the canvas, AI prompt, and all suggestions? This action cannot be undone."
-        confirmButtonText="Clear All"
-        confirmButtonVariant="danger"
-      />
-
+      <ConfirmationDialog isOpen={showClearConfirm} onClose={() => setShowClearConfirm(false)} onConfirm={handleClearAll} title="Clear All" message="Are you sure? This cannot be undone." confirmButtonText="Clear All" confirmButtonVariant="danger" />
+      {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} onImport={(els) => updateFormElementsWithHistory(prev => [...prev, ...els])} />}
       {showCodeModal && <CodeModal code={generatedCode} onClose={() => setShowCodeModal(false)} />}
+      {showPromptModal && <PromptModal prompt={generatedPrompt} onClose={() => setShowPromptModal(false)} />}
       {showPreviewModal && <PreviewModal elements={formElements} onClose={() => setShowPreviewModal(false)} />}
     </div>
   );
