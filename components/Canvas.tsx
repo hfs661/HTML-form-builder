@@ -12,7 +12,7 @@ interface CanvasProps {
 }
 
 const TrashIcon: React.FC<{onClick: (e: React.MouseEvent) => void}> = ({onClick}) => (
-    <button onClick={onClick} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity opacity-0 group-hover:opacity-100 z-10 focus:outline-none shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
+    <button onClick={onClick} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity opacity-0 group-hover:opacity-100 z-10 focus:outline-none focus:opacity-100 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
 );
 
 const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, selectedIds, updateElement }) => {
@@ -129,15 +129,22 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     if (dragOverTarget?.parentId !== parentId || dragOverTarget?.index !== index) setDragOverTarget({ parentId, index });
   };
 
-  const handleSelect = (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+  const handleSelect = (id: string, multiSelect: boolean = false) => {
+      if (multiSelect) {
           if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter(x => x !== id));
           else setSelectedIds([...selectedIds, id]);
       } else {
           setSelectedIds([id]);
       }
       setEditingElementId(null);
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          handleSelect(id, e.ctrlKey || e.metaKey || e.shiftKey);
+      }
   };
 
   const RecursiveList = ({ items, parentId }: { items: FormElement[], parentId: string | null }) => {
@@ -160,12 +167,16 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                      <div className="h-4 -mt-2 w-full absolute z-10" onDragOver={(e) => handleDragOver(e, parentId, index)} onDrop={(e) => handleDrop(e, parentId, index)}></div>
                      <div
                         draggable={!resizing}
-                        onClick={(e) => handleSelect(e, element.id)}
-                        onDoubleClick={(e) => { e.stopPropagation(); handleSelect(e, element.id); setEditingElementId(element.id); }}
+                        onClick={(e) => { e.stopPropagation(); handleSelect(element.id, e.ctrlKey || e.metaKey || e.shiftKey); }}
+                        onDoubleClick={(e) => { e.stopPropagation(); handleSelect(element.id, false); setEditingElementId(element.id); }}
                         onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify(element)); }}
                         onDragOver={(e) => element.type === 'container' ? handleDragOver(e, element.id, element.children?.length || 0) : null}
+                        onKeyDown={(e) => handleKeyDown(e, element.id)}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Select ${element.label}`}
                         className={`group relative p-4 border rounded-md cursor-grab active:cursor-grabbing transition-all duration-150 outline-none 
-                            ${isSelected ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-1 z-10' : 'border-gray-300 hover:border-gray-400'} 
+                            ${isSelected ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-1 z-10' : 'border-gray-300 hover:border-gray-400 focus:border-brand-primary focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50'} 
                             ${dragOverTarget?.parentId === element.id ? 'bg-blue-50 ring-2 ring-brand-primary border-brand-primary' : 'bg-white'} h-full shadow-sm hover:shadow-md`}
                      >
                         <FormElementRenderer element={element} isEditing={editingElementId === element.id} onStartEditing={setEditingElementId} onStopEditing={() => setEditingElementId(null)} onUpdate={updateElement}>

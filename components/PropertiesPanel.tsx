@@ -24,7 +24,7 @@ const PropertyInput: React.FC<{ label: string; name: string; value: string | num
             onChange={onChange} 
             placeholder={placeholder} 
             min={min}
-            className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary" 
+            className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary focus:outline-none transition-shadow" 
         />
     </div>
 );
@@ -32,12 +32,16 @@ const PropertyInput: React.FC<{ label: string; name: string; value: string | num
 const PropertyToggle: React.FC<{ label: string; checked: boolean; onChange: (val: boolean) => void }> = ({ label, checked, onChange }) => (
     <div className="mb-3 flex items-center justify-between">
         <label className="text-xs font-medium text-gray-500">{label}</label>
-        <input 
-            type="checkbox" 
-            checked={!!checked} 
-            onChange={(e) => onChange(e.target.checked)} 
-            className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-primary cursor-pointer" 
-        />
+        <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+            <input 
+                type="checkbox" 
+                checked={!!checked} 
+                onChange={(e) => onChange(e.target.checked)} 
+                className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 checked:right-0 checked:border-brand-primary"
+                style={{ right: checked ? '0' : 'auto', left: checked ? 'auto' : '0' }}
+            />
+            <label className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${checked ? 'bg-brand-primary' : 'bg-gray-300'}`}></label>
+        </div>
     </div>
 );
 
@@ -49,25 +53,45 @@ const PropertyTextarea: React.FC<{ label: string; value: string | undefined; onC
             onChange={onChange} 
             placeholder={placeholder} 
             rows={rows} 
-            className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary" 
+            className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary focus:outline-none transition-shadow" 
             style={{ fontFamily }} 
         />
     </div>
 );
 
-const PropertySelect: React.FC<{ label: string; name: string; value: string | undefined; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; options: {value: string, label: string}[] }> = ({ label, name, value, onChange, options }) => (
-    <div className="mb-3">
-        <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-        <select 
-            name={name} 
-            value={value === undefined || value === null ? '' : value} 
-            onChange={onChange} 
-            className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
-        >
-            {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-        </select>
-    </div>
-);
+const PropertySelect: React.FC<{ label: string; name: string; value: string | undefined; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; options: {value: string, label: string}[] }> = ({ label, name, value, onChange, options }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const showFilter = options.length > 8;
+
+    const filteredOptions = options.filter(opt => opt.label.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    return (
+        <div className="mb-3">
+            <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
+            {showFilter && (
+                <input 
+                    type="text" 
+                    placeholder="Search options..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full p-1.5 mb-1.5 text-xs border border-gray-200 rounded bg-gray-50 focus:bg-white focus:border-brand-primary focus:outline-none"
+                />
+            )}
+            <select 
+                name={name} 
+                value={value === undefined || value === null ? '' : value} 
+                onChange={onChange} 
+                className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary focus:outline-none"
+            >
+                {filteredOptions.length > 0 ? (
+                    filteredOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                ) : (
+                    <option disabled>No matches found</option>
+                )}
+            </select>
+        </div>
+    );
+};
 
 const ColorPicker: React.FC<{ label: string; value: string | undefined; onChange: (val: string) => void }> = ({ label, value, onChange }) => (
     <div className="mb-3">
@@ -77,14 +101,14 @@ const ColorPicker: React.FC<{ label: string; value: string | undefined; onChange
                 type="color" 
                 value={value || '#000000'} 
                 onChange={(e) => onChange(e.target.value)} 
-                className="h-8 w-8 rounded border border-gray-300 cursor-pointer p-0" 
+                className="h-8 w-8 rounded border border-gray-300 cursor-pointer p-0 shadow-sm" 
             />
             <input 
                 type="text" 
                 value={value || ''} 
                 onChange={(e) => onChange(e.target.value)} 
                 placeholder="#RRGGBB" 
-                className="flex-1 p-1 text-sm border border-gray-300 rounded-md" 
+                className="flex-1 p-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary focus:outline-none" 
             />
         </div>
     </div>
@@ -93,9 +117,9 @@ const ColorPicker: React.FC<{ label: string; value: string | undefined; onChange
 const CollapsibleSection: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, children, defaultOpen = false }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
-        <div className="border border-gray-200 rounded-md mb-2 overflow-hidden shadow-sm">
-            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 text-xs font-bold text-gray-700 uppercase tracking-wide focus:outline-none">{title}<svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
-            {isOpen && <div className="p-3 bg-white border-t border-gray-200">{children}</div>}
+        <div className="border border-gray-200 rounded-md mb-2 overflow-hidden shadow-sm transition-shadow hover:shadow-md">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 text-xs font-bold text-gray-700 uppercase tracking-wide focus:outline-none transition-colors">{title}<svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
+            {isOpen && <div className="p-3 bg-white border-t border-gray-200 animate-fade-in-staggered">{children}</div>}
         </div>
     );
 };
@@ -178,7 +202,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                   {onGroup && (
                     <button 
                         onClick={onGroup} 
-                        className="w-full py-3 bg-gray-600 text-white rounded-md font-bold text-sm hover:bg-gray-700 transition-all shadow-md mb-2 active:scale-95"
+                        className="w-full py-3 bg-gray-600 text-white rounded-md font-bold text-sm hover:bg-gray-700 transition-all shadow-md mb-2 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                     >
                         Group Elements
                     </button>
@@ -187,7 +211,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                   <button 
                     onClick={handleGroupWithAIMagic} 
                     disabled={isGrouping}
-                    className="w-full py-3 bg-indigo-600 text-white rounded-md font-bold text-sm hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                    className="w-full py-3 bg-indigo-600 text-white rounded-md font-bold text-sm hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                       {isGrouping ? "AI is analyzing..." : "Group with AI Magic ✨"}
                   </button>
@@ -220,7 +244,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
       </div>
       <div className="flex border-b border-gray-300 bg-white">
         {(['props', 'style', 'logic'] as const).map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider focus:outline-none transition-all ${activeTab === tab ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-gray-400 hover:text-gray-600'}`}>{tab}</button>
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider focus:outline-none transition-all ${activeTab === tab ? 'text-brand-primary border-b-2 border-brand-primary bg-blue-50' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'}`}>{tab}</button>
         ))}
       </div>
       <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
@@ -320,7 +344,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
              {['news-card', 'typography', 'image'].includes(selectedElement.type) && (
                  <CollapsibleSection title="AI Content Helper" defaultOpen>
                      <PropertyTextarea label="Tell AI what this element is about" value={aiContentPrompt} onChange={(e) => setAiContentPrompt(e.target.value)} placeholder="e.g. 'Generate a tech news title and summary'" />
-                     <button onClick={handleAiContentGenerate} disabled={isGenerating} className="w-full py-2 bg-brand-primary text-white rounded text-xs font-bold uppercase hover:bg-brand-accent transition-colors">
+                     <button onClick={handleAiContentGenerate} disabled={isGenerating} className="w-full py-2 bg-brand-primary text-white rounded text-xs font-bold uppercase hover:bg-brand-accent transition-colors shadow-sm active:scale-95">
                         {isGenerating ? 'Magic in progress...' : 'Generate with AI ✨'}
                      </button>
                  </CollapsibleSection>
@@ -365,7 +389,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                         </div>
                     </div>
                 ))}
-                <button onClick={handleAddDataLogicRule} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded text-xs font-bold uppercase hover:bg-white transition-colors">+ Add New Data Rule</button>
+                <button onClick={handleAddDataLogicRule} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded text-xs font-bold uppercase hover:bg-white transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary">+ Add New Data Rule</button>
               </CollapsibleSection>
 
               <CollapsibleSection title="Cross-Field Validation">

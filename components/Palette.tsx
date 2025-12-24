@@ -6,9 +6,10 @@ import { STANDARD_ELEMENTS, SNIPPETS, SCRIPT_SNIPPETS, STYLE_SNIPPETS, LAYOUT_SN
 interface PaletteProps {
   suggestedElements: Partial<FormElement>[];
   onClearSuggestions: () => void;
+  onAddElement: (item: any) => void;
 }
 
-const DraggableItem: React.FC<{ item: any, type: 'element' | 'snippet', isSuggestion?: boolean, index?: number, onRemove?: () => void }> = ({ item, type, isSuggestion = false, index = 0, onRemove }) => {
+const DraggableItem: React.FC<{ item: any, type: 'element' | 'snippet', isSuggestion?: boolean, index?: number, onRemove?: () => void, onAdd?: (item: any) => void }> = ({ item, type, isSuggestion = false, index = 0, onRemove, onAdd }) => {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     if (type === 'snippet') {
         e.dataTransfer.setData('application/json', JSON.stringify({ isSnippet: true, elements: item.elements }));
@@ -18,6 +19,17 @@ const DraggableItem: React.FC<{ item: any, type: 'element' | 'snippet', isSugges
             data.styles = { display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '1rem', padding: '1rem' };
         }
         e.dataTransfer.setData('application/json', JSON.stringify(data));
+    }
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.key === 'Enter' || e.key === ' ') && onAdd) {
+        e.preventDefault();
+        const payload = type === 'snippet' ? { isSnippet: true, elements: item.elements } : { ...item };
+        if (item.label === 'Grid Row (12-Col)') {
+            payload.styles = { display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '1rem', padding: '1rem' };
+        }
+        onAdd(payload);
     }
   };
   
@@ -34,7 +46,11 @@ const DraggableItem: React.FC<{ item: any, type: 'element' | 'snippet', isSugges
     <div
       draggable
       onDragStart={handleDragStart}
-      className={`group flex items-center p-3 mb-2 rounded-md cursor-grab transition-all duration-150 ease-in-out ${isSuggestion ? 'bg-blue-100 hover:bg-blue-200 text-blue-800' : 'bg-white hover:bg-gray-100 text-brand-text'} border border-gray-200 shadow-sm hover:shadow-md ${animationClass} relative`}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="button"
+      aria-label={`Add ${item.label}`}
+      className={`group flex items-center p-3 mb-2 rounded-md cursor-grab transition-all duration-150 ease-in-out ${isSuggestion ? 'bg-blue-100 hover:bg-blue-200 text-blue-800' : 'bg-white hover:bg-gray-100 text-brand-text'} border border-gray-200 shadow-sm hover:shadow-md hover:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-1 ${animationClass} relative`}
       style={animationStyle}
     >
       {icon}
@@ -42,7 +58,7 @@ const DraggableItem: React.FC<{ item: any, type: 'element' | 'snippet', isSugges
       {onRemove && (
         <button 
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="absolute right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+          className="absolute right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity focus:opacity-100"
           title="Delete template"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -55,7 +71,7 @@ const DraggableItem: React.FC<{ item: any, type: 'element' | 'snippet', isSugges
 };
 
 
-const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions }) => {
+const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions, onAddElement }) => {
   const [userTemplates, setUserTemplates] = useState<SnippetItem[]>([]);
 
   useEffect(() => {
@@ -92,6 +108,7 @@ const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions
               item={template} 
               type="snippet" 
               onRemove={() => template.id && removeTemplate(template.id)}
+              onAdd={onAddElement}
             />
           ))}
           <div className="border-b border-gray-300 my-4"></div>
@@ -100,22 +117,22 @@ const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions
 
       <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Grid Layouts</h3>
       {LAYOUT_SNIPPETS.map((snippet, idx) => (
-          <DraggableItem key={`layout-${idx}`} item={snippet} type="snippet" />
+          <DraggableItem key={`layout-${idx}`} item={snippet} type="snippet" onAdd={onAddElement} />
       ))}
 
       <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 mt-6">Basic Elements</h3>
       {STANDARD_ELEMENTS.map((item: PaletteItem) => (
-        <DraggableItem key={item.label} item={{...item, name: item.type}} type="element" />
+        <DraggableItem key={item.label} item={{...item, name: item.type}} type="element" onAdd={onAddElement} />
       ))}
 
       <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 mt-6">Logic Snippets</h3>
       {SCRIPT_SNIPPETS.map((snippet, index) => (
-          <DraggableItem key={`script-snippet-${index}`} item={snippet} type="snippet" />
+          <DraggableItem key={`script-snippet-${index}`} item={snippet} type="snippet" onAdd={onAddElement} />
       ))}
 
       <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 mt-6">UI Templates</h3>
       {STYLE_SNIPPETS.map((snippet: SnippetItem, index) => (
-          <DraggableItem key={`style-snippet-${index}`} item={snippet} type="snippet" />
+          <DraggableItem key={`style-snippet-${index}`} item={snippet} type="snippet" onAdd={onAddElement} />
       ))}
       
       {suggestedElements.length > 0 && (
@@ -125,7 +142,7 @@ const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions
             <button onClick={onClearSuggestions} className="text-xs font-medium text-brand-primary hover:underline focus:outline-none">Clear</button>
           </div>
           {suggestedElements.map((item, index) => (
-            <DraggableItem key={index} item={item} isSuggestion index={index} type="element" />
+            <DraggableItem key={index} item={item} isSuggestion index={index} type="element" onAdd={onAddElement} />
           ))}
         </>
       )}

@@ -16,15 +16,15 @@ interface FormElementRendererProps {
 }
 
 const sizeClasses: Record<string, string> = {
-  small: 'px-2 py-1 text-sm',
-  medium: 'px-3 py-2 text-base',
-  large: 'px-4 py-3 text-lg',
+  small: 'px-3 py-1.5 text-xs',
+  medium: 'px-4 py-2.5 text-sm',
+  large: 'px-5 py-3 text-base',
 };
 
 const checkboxRadioSizeClasses: Record<string, string> = {
-  small: 'h-3 w-3',
-  medium: 'h-4 w-4',
-  large: 'h-5 w-5',
+  small: 'h-3.5 w-3.5',
+  medium: 'h-5 w-5',
+  large: 'h-6 w-6',
 };
 
 const applyMask = (value: string, mask: string) => {
@@ -240,20 +240,20 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const AccordionComponent = () => {
       const [isOpen, setIsOpen] = useState(true);
       return (
-        <div className="w-full border rounded-md overflow-hidden" style={containerStyle}>
+        <div className="w-full border border-gray-200 rounded-lg overflow-hidden shadow-sm" style={containerStyle}>
             <button 
                 type="button"
                 onClick={() => setIsOpen(!isOpen)} 
-                className="w-full flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none"
+                className="w-full flex justify-between items-center p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary"
                 aria-expanded={isOpen}
             >
-                <div className="font-medium text-gray-700"><EditableLabel /></div>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                <div className="font-semibold text-gray-800"><EditableLabel /></div>
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 text-gray-500 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
             </button>
             {isOpen && (
-                <div className="p-4 border-t border-gray-200">
+                <div className="p-5 border-t border-gray-200 bg-white">
                     {children}
                     {!children && preview && <div className="text-xs text-gray-400 italic">Empty Accordion</div>}
                 </div>
@@ -268,12 +268,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       const title = newsTitle || element.newsTitle || "News Title";
       const content = newsContent || element.newsContent || "News Content";
       return (
-          <div className={`border rounded-lg overflow-hidden shadow-sm bg-white ${pointerEvents}`} style={containerStyle}>
+          <div className={`border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow bg-white ${pointerEvents}`} style={containerStyle}>
               <img src={displayImage} alt={newsTitle || "News"} className="w-full h-48 object-cover" />
-              <div className="p-4">
-                  <h3 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{title}</h3>
-                  <div className={`text-gray-600 text-sm mb-4 transition-all ${expanded ? '' : 'line-clamp-2'}`}>{content}</div>
-                   <button type="button" onClick={() => setExpanded(!expanded)} className="text-brand-primary text-sm font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-brand-primary rounded p-1">
+              <div className="p-5">
+                  <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{title}</h3>
+                  <div className={`text-gray-600 text-sm mb-4 transition-all leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>{content}</div>
+                   <button type="button" onClick={() => setExpanded(!expanded)} className="text-brand-primary text-sm font-semibold hover:text-brand-accent focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary rounded p-1">
                           {expanded ? 'Read Less' : 'Read More'}
                    </button>
               </div>
@@ -296,7 +296,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       onBlur: handleBlur
   };
 
-  const commonInputClasses = `form-control w-full border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary placeholder-gray-500 transition-colors ${pointerEvents} ${sizeClass} ${disabledClass} ${error ? 'border-red-500 ring-1 ring-red-500' : ''}`;
+  const commonInputClasses = `form-control w-full border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary placeholder-gray-400 transition-all duration-200 ease-in-out ${pointerEvents} ${sizeClass} ${disabledClass} ${error ? 'border-red-500 ring-1 ring-red-500 focus:ring-red-500' : ''}`;
 
   // Handle specialized types by mapping them to core types
   const effectiveType = (['inputMask', 'text'].includes(type)) ? 'text' : 
@@ -309,31 +309,31 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'html-block':
         return (htmlContent || element.htmlContent) || preview ? <div className="w-full" style={containerStyle} dangerouslySetInnerHTML={{ __html: htmlContent || element.htmlContent || '' }} /> : <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded">HTML Block</div>;
     case 'divider':
-        return <hr className="w-full border-t my-2" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} />;
+        return <hr className="w-full border-t my-4" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} />;
     case 'image':
          return (
             <div className="w-full" style={containerStyle}>
                 <img 
                     src={src || "https://via.placeholder.com/300x200?text=Image+Placeholder"} 
                     alt={altText || element.altText || label} 
-                    className={`max-w-full h-auto ${pointerEvents}`}
+                    className={`max-w-full h-auto rounded-md ${pointerEvents}`}
                     style={{...appearanceStyles, width: '100%', height: styles?.height ? '100%' : 'auto', objectFit: 'cover'}}
                 />
             </div>
          );
     case 'typography':
         const Tag = (headingLevel || element.headingLevel || 'p') as React.ElementType;
-        const textClasses = { h1: 'text-4xl font-bold mb-4', h2: 'text-3xl font-bold mb-3', h3: 'text-2xl font-bold mb-3', h4: 'text-xl font-bold mb-2', h5: 'text-lg font-bold mb-2', h6: 'text-base font-bold mb-2', p: 'text-base mb-2', span: 'text-base' };
+        const textClasses = { h1: 'text-4xl font-extrabold mb-4 tracking-tight', h2: 'text-3xl font-bold mb-3 tracking-tight', h3: 'text-2xl font-bold mb-3', h4: 'text-xl font-bold mb-2', h5: 'text-lg font-bold mb-2', h6: 'text-base font-bold mb-2', p: 'text-base mb-2 leading-relaxed', span: 'text-base' };
         return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[Tag as keyof typeof textClasses] || 'text-base'}`} style={appearanceStyles}>{textContent || element.textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
     case 'script':
         if (preview) return null;
-        return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm font-mono text-xs">Script: {label}</div>;
+        return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm font-mono text-xs text-yellow-800">JS Snippet: {label}</div>;
     case 'container':
         const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-4' : '';
-        const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-md min-h-[50px]';
+        const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-lg min-h-[50px] bg-gray-50/50';
         return (
             <div className={`w-full ${borderClass} ${defaultStackClass} p-4`} style={containerStyle}>
-                {!preview && <div className="mb-2"><label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label></div>}
+                {!preview && <div className="mb-2"><label className="block text-sm font-semibold text-gray-700 mb-1 tracking-wide"><EditableLabel /></label></div>}
                 {children}
             </div>
         );
@@ -341,7 +341,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'text':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type={subType || 'text'} 
@@ -359,7 +359,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'textarea':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <textarea 
             ref={inputRef as React.RefObject<HTMLTextAreaElement>}
             id={name} name={name} placeholder={placeholder} rows={4} disabled={disabled} {...validationProps} 
@@ -369,13 +369,20 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'select':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <select 
-            ref={inputRef as React.RefObject<HTMLSelectElement>}
-            id={name} name={name} disabled={disabled} multiple={element.multiple} {...validationProps} 
-            className={commonInputClasses} style={inputStyle}>
-            {options?.map((option, index) => <option key={index} value={option}>{option}</option>)}
-          </select>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
+          <div className="relative">
+            <select 
+                ref={inputRef as React.RefObject<HTMLSelectElement>}
+                id={name} name={name} disabled={disabled} multiple={element.multiple} {...validationProps} 
+                className={`${commonInputClasses} appearance-none bg-white pr-10`} style={inputStyle}>
+                {options?.map((option, index) => <option key={index} value={option}>{option}</option>)}
+            </select>
+            {!element.multiple && (
+                <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+            )}
+          </div>
         </div>
       );
     case 'checkbox':
@@ -384,23 +391,23 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             id={name} name={name} type="checkbox" disabled={disabled} {...validationProps} 
-            className={`text-brand-primary border-gray-300 rounded focus:ring-brand-primary ${pointerEvents} ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} 
+            className={`text-brand-primary border-gray-300 rounded focus:ring-brand-primary transition duration-150 ease-in-out cursor-pointer ${pointerEvents} ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} 
             style={{...inputStyle, width: 'auto', height: 'auto'}} />
-          <label htmlFor={name} className="ml-2 block text-sm text-gray-900"><EditableLabel forCheckboxOrRadio={true} /></label>
+          <label htmlFor={name} className="ml-2.5 block text-sm font-medium text-gray-700 cursor-pointer"><EditableLabel forCheckboxOrRadio={true} /></label>
         </div>
       );
     case 'radio':
       return (
         <div className="w-full" style={containerStyle} role="radiogroup" aria-labelledby={`${name}-label`}>
-          <label id={`${name}-label`} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-          <div className={`${pointerEvents}`}>
+          <label id={`${name}-label`} className="block text-sm font-semibold text-gray-700 mb-2"><EditableLabel /></label>
+          <div className={`${pointerEvents} space-y-2`}>
             {options?.map((option, index) => (
-              <div key={index} className="flex items-center mt-1">
+              <div key={index} className="flex items-center">
                 <input 
                   id={`${name}-${index}`} name={name} type="radio" disabled={disabled} value={option} {...validationProps} 
-                  className={`text-brand-primary border-gray-300 focus:ring-brand-primary ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} 
+                  className={`text-brand-primary border-gray-300 focus:ring-brand-primary transition duration-150 ease-in-out cursor-pointer ${checkboxRadioSizeClasses[currentSize]} ${disabledClass}`} 
                   style={{...inputStyle, width: 'auto', height: 'auto'}} />
-                <label htmlFor={`${name}-${index}`} className="ml-2 block text-sm text-gray-900">{option}</label>
+                <label htmlFor={`${name}-${index}`} className="ml-2.5 block text-sm text-gray-700 cursor-pointer">{option}</label>
               </div>
             ))}
           </div>
@@ -409,7 +416,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'date':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type="date" id={name} name={name} disabled={disabled} {...validationProps} 
@@ -419,7 +426,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'number':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type="number" id={name} name={name} placeholder={placeholder} disabled={disabled} {...validationProps} 
@@ -429,52 +436,73 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'range':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type="range" id={name} name={name} disabled={disabled} {...validationProps} 
-            className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer ${pointerEvents} ${disabledClass}`} />
+            className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-primary/50 ${pointerEvents} ${disabledClass}`} />
         </div>
       );
     case 'file':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type="file" id={name} name={name} disabled={disabled} {...validationProps} accept={element.accept} 
-            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-brand-primary hover:file:bg-blue-100 ${pointerEvents} ${sizeClass.replace('px-3 py-2', '')} ${disabledClass}`} style={inputStyle} />
+            className={`w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-brand-primary/10 file:text-brand-primary hover:file:bg-brand-primary/20 transition-all ${pointerEvents} ${sizeClass.replace('px-4 py-2.5', '')} ${disabledClass}`} style={inputStyle} />
         </div>
       );
     case 'color':
       return (
         <div className="w-full" style={containerStyle}>
-          <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
+          <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <input 
             ref={inputRef as React.RefObject<HTMLInputElement>}
             type="color" id={name} name={name} disabled={disabled} 
-            className={`w-full h-10 border border-gray-300 shadow-sm focus:ring-brand-primary focus:border-brand-primary ${pointerEvents} ${disabledClass}`} defaultValue="#0078D4" style={inputStyle} />
+            className={`w-full h-10 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-brand-primary/50 cursor-pointer p-1 ${pointerEvents} ${disabledClass}`} defaultValue="#0078D4" style={inputStyle} />
         </div>
       );
     case 'button':
-      const buttonColorClasses: Record<string, string> = { primary: 'bg-brand-primary hover:bg-brand-accent text-white', secondary: 'bg-gray-600 hover:bg-gray-700 text-white', danger: 'bg-red-600 hover:bg-red-700 text-white' };
+      const buttonColorClasses: Record<string, string> = { primary: 'bg-brand-primary hover:bg-brand-accent text-white shadow-brand-primary/30', secondary: 'bg-gray-600 hover:bg-gray-700 text-white shadow-gray-600/30', danger: 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/30' };
       const buttonClass = styles?.backgroundColor ? '' : buttonColorClasses[styles?.color || 'primary']; 
-      return <button type="button" disabled={disabled} onClick={handleButtonClick} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${buttonClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
+      return (
+        <button 
+            type="button" 
+            disabled={disabled} 
+            onClick={handleButtonClick} 
+            className={`font-semibold rounded-lg shadow-md transition-all duration-200 transform hover:-translate-y-0.5 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${buttonClass} ${disabledClass}`} 
+            style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} 
+            onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}
+        >
+            {label}
+        </button>
+      );
     case 'reset-button':
-        return <button type="reset" disabled={disabled} className={`font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 bg-gray-200 hover:bg-gray-300 text-gray-800 ${sizeClass} ${disabledClass}`} style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}>{label}</button>;
+        return (
+            <button 
+                type="reset" 
+                disabled={disabled} 
+                className={`font-semibold rounded-lg shadow-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200 transform hover:-translate-y-0.5 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${disabledClass}`} 
+                style={{...inputStyle, backgroundColor: styles?.backgroundColor || undefined }} 
+                onDoubleClick={(e) => { if(!preview) { e.stopPropagation(); onStartEditing?.(id); }}}
+            >
+                {label}
+            </button>
+        );
     case 'table':
         const cols = element.colCount || 3;
         const rows = rowCount || 3;
         const ths = headers || Array.from({length: cols}, (_, i) => `Header ${i+1}`);
         return (
-            <div className="w-full overflow-x-auto" style={containerStyle}>
-                <label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-                <table className="min-w-full border-collapse border border-gray-300 bg-white text-sm" style={{ borderColor: styles?.borderColor, boxShadow: styles?.boxShadow, width: '100%' }}>
+            <div className="w-full overflow-x-auto border border-gray-200 rounded-lg shadow-sm" style={containerStyle}>
+                <div className="p-2 border-b border-gray-200 bg-gray-50"><label className="block text-sm font-semibold text-gray-700"><EditableLabel /></label></div>
+                <table className="min-w-full divide-y divide-gray-200 bg-white text-sm" style={{ borderColor: styles?.borderColor, boxShadow: styles?.boxShadow, width: '100%' }}>
                     <thead className="bg-gray-50">
-                        <tr>{ths.map((h, i) => <th key={i} className="border border-gray-300 px-4 py-2 text-left font-medium text-gray-500" style={{ borderColor: styles?.borderColor, color: styles?.textColor }}>{h}</th>)}</tr>
+                        <tr>{ths.map((h, i) => <th key={i} className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider" style={{ borderColor: styles?.borderColor, color: styles?.textColor }}>{h}</th>)}</tr>
                     </thead>
-                    <tbody>
-                        {Array.from({length: rows}).map((_, r) => <tr key={r}>{Array.from({length: cols}).map((_, c) => <td key={c} className="border border-gray-300 px-4 py-2" style={{ borderColor: styles?.borderColor }}>Cell {r+1}-{c+1}</td>)}</tr>)}
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {Array.from({length: rows}).map((_, r) => <tr key={r}>{Array.from({length: cols}).map((_, c) => <td key={c} className="px-6 py-4 whitespace-nowrap text-gray-600" style={{ borderColor: styles?.borderColor }}>Cell {r+1}-{c+1}</td>)}</tr>)}
                     </tbody>
                 </table>
             </div>
@@ -482,16 +510,16 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'iframe':
         return (
             <div className="w-full" style={containerStyle}>
-                 <label className="block text-sm font-medium text-gray-700 mb-1"><EditableLabel /></label>
-                 <iframe src={src || "about:blank"} className={`w-full border border-gray-300 bg-gray-100 ${pointerEvents}`} style={{ height: styles?.height || '300px', width: '100%', borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius, boxShadow: styles?.boxShadow }} title={label} />
+                 <label className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
+                 <iframe src={src || "about:blank"} className={`w-full border border-gray-200 rounded-lg bg-gray-50 ${pointerEvents}`} style={{ height: styles?.height || '300px', width: '100%', borderColor: styles?.borderColor, borderWidth: styles?.borderWidth, borderRadius: styles?.borderRadius, boxShadow: styles?.boxShadow }} title={label} />
                  {!src && <div className="text-xs text-gray-500 italic mt-1">Select element to set Source URL in properties.</div>}
             </div>
         );
     case 'navbar':
         return (
-            <div className="w-full bg-white border-b border-gray-200 shadow-sm py-3 px-4 flex items-center justify-between" style={containerStyle}>
+            <div className="w-full bg-white border-b border-gray-200 shadow-sm py-3 px-6 flex items-center justify-between" style={containerStyle}>
                 <div className="font-bold text-xl text-brand-primary" style={{ color: styles?.textColor }}>{brand || label}</div>
-                <div className="space-x-4">{links?.map((link, i) => <a key={i} href={link.url} className={`text-gray-600 hover:text-brand-primary font-medium ${pointerEvents}`} onClick={e => e.preventDefault()} style={{ color: styles?.textColor }}>{link.label}</a>) || <span className="text-gray-400 italic">No links configured</span>}</div>
+                <div className="space-x-6">{links?.map((link, i) => <a key={i} href={link.url} className={`text-gray-600 hover:text-brand-primary font-medium transition-colors ${pointerEvents}`} onClick={e => e.preventDefault()} style={{ color: styles?.textColor }}>{link.label}</a>) || <span className="text-gray-400 italic">No links configured</span>}</div>
             </div>
         );
     case 'news-card': return <NewsCardComponent />;

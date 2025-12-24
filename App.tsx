@@ -11,6 +11,20 @@ import PromptModal from './components/PromptModal';
 import type { FormElement, FormElementType, SnippetItem, ElementStyle } from './types';
 import { getFormSuggestions, analyzeFormContext } from './services/geminiService';
 
+const createNewElement = (data: any): FormElement => ({
+  id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  type: data.type as FormElementType,
+  label: data.label || 'New Element',
+  name: data.name || `el_${Date.now()}`,
+  options: data.options,
+  children: data.children?.map((c: any) => createNewElement(c)),
+  styles: { size: 'medium', ...(data.styles || {}) },
+  textContent: data.textContent,
+  headingLevel: data.headingLevel,
+  src: data.src,
+  altText: data.altText
+});
+
 const App: React.FC = () => {
   const [formElements, setFormElements] = useState<FormElement[]>(() => {
     try {
@@ -164,6 +178,13 @@ const App: React.FC = () => {
           return insertAfter(prev);
       });
   }, [historyIndex]);
+
+  const handleAddElement = (data: any) => {
+      updateFormElementsWithHistory(prev => {
+          const elementsToAdd = data.isSnippet ? data.elements.map(createNewElement) : [createNewElement(data)];
+          return [...prev, ...elementsToAdd];
+      });
+  };
 
   const handleGroupElements = () => {
     if (selectedIds.length < 1) return;
@@ -475,7 +496,11 @@ const App: React.FC = () => {
             </div>
         )}
       <main className="flex flex-grow overflow-hidden">
-        <Palette suggestedElements={suggestedElements} onClearSuggestions={() => setSuggestedElements([])} />
+        <Palette 
+            suggestedElements={suggestedElements} 
+            onClearSuggestions={() => setSuggestedElements([])} 
+            onAddElement={handleAddElement}
+        />
         <Canvas 
           elements={formElements} 
           setElements={updateFormElementsWithHistory} 
