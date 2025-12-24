@@ -62,6 +62,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                                 switch(rule.condition) {
                                     case 'equals': matches = val === rule.value; break;
                                     case 'not_equals': matches = val !== rule.value; break;
+                                    case 'contains': matches = val.toLowerCase().includes(rule.value.toLowerCase()); break;
                                     case 'greater_than': matches = Number(val) > Number(rule.value); break;
                                     case 'less_than': matches = Number(val) < Number(rule.value); break;
                                     case 'is_empty': matches = !val || val === ''; break;

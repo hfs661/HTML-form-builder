@@ -432,8 +432,9 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen font-sans text-brand-text">
-      <header className="flex justify-between items-center p-3 bg-brand-primary text-white shadow-md z-10">
+    <div className="flex flex-col h-screen font-sans text-brand-text overflow-hidden">
+      {/* Header - Fixed Height */}
+      <header className="flex-none flex justify-between items-center p-3 bg-brand-primary text-white shadow-md z-30">
         <div className="flex items-center space-x-4">
             <h1 className="text-2xl font-bold">Power Form Builder AI</h1>
             <div className="flex space-x-1 bg-brand-accent rounded-md p-1">
@@ -474,7 +475,9 @@ const App: React.FC = () => {
            <button onClick={() => { setGeneratedCode(generateHTML(formElements)); setShowCodeModal(true); }} disabled={formElements.length === 0} className="px-4 py-2 bg-white text-brand-primary font-semibold rounded-md shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">Code</button>
         </div>
       </header>
-       <div className="p-3 bg-brand-secondary border-b border-gray-300">
+
+      {/* AI Bar - Fixed Height */}
+       <div className="flex-none p-3 bg-brand-secondary border-b border-gray-300 z-20">
             <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center sm:space-x-2">
                 <input type="text" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Describe your form, e.g., 'A user registration form...'" className="flex-grow p-2 w-full border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary" disabled={isLoading} />
                 <button onClick={handleGetSuggestions} disabled={isLoading || !aiPrompt.trim()} className="mt-2 sm:mt-0 px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">{isLoading ? 'Thinking...' : 'AI Suggest'}</button>
@@ -495,30 +498,41 @@ const App: React.FC = () => {
                 {error}
             </div>
         )}
-      <main className="flex flex-grow overflow-hidden">
-        <Palette 
-            suggestedElements={suggestedElements} 
-            onClearSuggestions={() => setSuggestedElements([])} 
-            onAddElement={handleAddElement}
-        />
-        <Canvas 
-          elements={formElements} 
-          setElements={updateFormElementsWithHistory} 
-          setSelectedIds={setSelectedIds} 
-          selectedIds={selectedIds}
-          updateElement={updateElement}
-        />
-        <PropertiesPanel 
-            selectedElement={selectedElement} 
-            selectedIds={selectedIds}
-            updateElement={updateElement} 
-            closePanel={() => setSelectedIds([])} 
-            allElements={formElements}
-            onDuplicate={duplicateElement}
-            onGroup={handleGroupElements}
-            onGroupWithAI={handleGroupWithAI}
-        />
+
+      {/* Main Content Area - Flex Grow */}
+      <main className="flex flex-grow overflow-hidden relative">
+        <div className="h-full overflow-y-auto border-r border-gray-300 z-10 flex-shrink-0">
+            <Palette 
+                suggestedElements={suggestedElements} 
+                onClearSuggestions={() => setSuggestedElements([])} 
+                onAddElement={handleAddElement}
+            />
+        </div>
+        
+        <div className="flex-grow h-full overflow-y-auto bg-gray-100 relative">
+            <Canvas 
+              elements={formElements} 
+              setElements={updateFormElementsWithHistory} 
+              setSelectedIds={setSelectedIds} 
+              selectedIds={selectedIds}
+              updateElement={updateElement}
+            />
+        </div>
+
+        <div className="h-full overflow-y-auto border-l border-gray-300 z-10 flex-shrink-0 bg-white">
+            <PropertiesPanel 
+                selectedElement={selectedElement} 
+                selectedIds={selectedIds}
+                updateElement={updateElement} 
+                closePanel={() => setSelectedIds([])} 
+                allElements={formElements}
+                onDuplicate={duplicateElement}
+                onGroup={handleGroupElements}
+                onGroupWithAI={handleGroupWithAI}
+            />
+        </div>
       </main>
+      
       <ConfirmationDialog isOpen={showClearConfirm} onClose={() => setShowClearConfirm(false)} onConfirm={handleClearAll} title="Clear All" message="Are you sure? This cannot be undone." confirmButtonText="Clear All" confirmButtonVariant="danger" />
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} onImport={(els) => updateFormElementsWithHistory(prev => [...prev, ...els])} />}
       {showCodeModal && <CodeModal code={generatedCode} onClose={() => setShowCodeModal(false)} />}

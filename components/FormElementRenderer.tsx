@@ -105,12 +105,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       const s = styles || {};
       if (isLayout) {
           return {
-              width: s.width,
+              width: s.width || '100%', // Default to 100% width if not specified
               height: s.height,
               minHeight: s.minHeight,
               gridColumn: s.gridColumn,
               gridRow: s.gridRow,
-              flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined,
+              flexGrow: s.flexGrow ? Number(s.flexGrow) : 1, // Default flex grow
               flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
               flexBasis: s.flexBasis,
               alignSelf: s.alignSelf,
@@ -240,11 +240,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const AccordionComponent = () => {
       const [isOpen, setIsOpen] = useState(true);
       return (
-        <div className="w-full border border-gray-200 rounded-lg overflow-hidden shadow-sm" style={containerStyle}>
+        <div className="w-full border border-gray-200 rounded-lg overflow-hidden shadow-sm flex flex-col h-full" style={containerStyle}>
             <button 
                 type="button"
                 onClick={() => setIsOpen(!isOpen)} 
-                className="w-full flex justify-between items-center p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary"
+                className="w-full flex justify-between items-center p-4 bg-gray-50 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary flex-shrink-0"
                 aria-expanded={isOpen}
             >
                 <div className="font-semibold text-gray-800"><EditableLabel /></div>
@@ -253,7 +253,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                 </svg>
             </button>
             {isOpen && (
-                <div className="p-5 border-t border-gray-200 bg-white">
+                <div className="p-5 border-t border-gray-200 bg-white flex-grow flex flex-col">
                     {children}
                     {!children && preview && <div className="text-xs text-gray-400 italic">Empty Accordion</div>}
                 </div>
@@ -298,7 +298,6 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
   const commonInputClasses = `form-control w-full border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary placeholder-gray-400 transition-all duration-200 ease-in-out ${pointerEvents} ${sizeClass} ${disabledClass} ${error ? 'border-red-500 ring-1 ring-red-500 focus:ring-red-500' : ''}`;
 
-  // Handle specialized types by mapping them to core types
   const effectiveType = (['inputMask', 'text'].includes(type)) ? 'text' : 
                         (['htmlContent', 'html-block'].includes(type)) ? 'html-block' : 
                         (['newsTitle', 'newsContent', 'newsImage'].includes(type)) ? 'news-card' : 
@@ -332,7 +331,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-4' : '';
         const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-lg min-h-[50px] bg-gray-50/50';
         return (
-            <div className={`w-full ${borderClass} ${defaultStackClass} p-4`} style={containerStyle}>
+            <div className={`w-full ${borderClass} ${defaultStackClass} p-4 flex flex-col h-full`} style={containerStyle}>
                 {!preview && <div className="mb-2"><label className="block text-sm font-semibold text-gray-700 mb-1 tracking-wide"><EditableLabel /></label></div>}
                 {children}
             </div>
@@ -367,17 +366,25 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         </div>
       );
     case 'select':
+      const isMultiple = element.multiple;
+      const selectClass = isMultiple 
+        ? `${commonInputClasses.replace('h-10', '')} p-2` 
+        : `${commonInputClasses} appearance-none bg-white pr-10`;
+      
       return (
         <div className="w-full" style={containerStyle}>
           <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
           <div className="relative">
             <select 
                 ref={inputRef as React.RefObject<HTMLSelectElement>}
-                id={name} name={name} disabled={disabled} multiple={element.multiple} {...validationProps} 
-                className={`${commonInputClasses} appearance-none bg-white pr-10`} style={inputStyle}>
+                id={name} name={name} disabled={disabled} multiple={isMultiple} {...validationProps} 
+                className={selectClass} 
+                style={{...inputStyle, height: isMultiple && !styles?.height ? 'auto' : inputStyle.height}}
+                size={isMultiple && !styles?.height ? 4 : undefined} 
+            >
                 {options?.map((option, index) => <option key={index} value={option}>{option}</option>)}
             </select>
-            {!element.multiple && (
+            {!isMultiple && (
                 <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                 </div>

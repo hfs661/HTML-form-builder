@@ -375,7 +375,21 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                     <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-md mb-3 relative shadow-sm">
                         <button onClick={() => removeDataLogicRule(idx)} className="absolute top-1 right-1 text-red-500 font-bold hover:scale-110 transition-transform">×</button>
                         <PropertySelect label="If field..." name="triggerId" value={rule.triggerId} onChange={(e) => updateDataLogicRule(idx, { triggerId: e.target.value })} options={[{value:'',label:'-- Select Source --'}, ...allElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
-                        <PropertySelect label="Condition" name="condition" value={rule.condition} onChange={(e) => updateDataLogicRule(idx, { condition: e.target.value as any })} options={[{value:'equals',label:'Equals'},{value:'not_equals',label:'Not Equals'},{value:'greater_than',label:'Is Greater Than'},{value:'is_empty',label:'Is Empty'}]} />
+                        <PropertySelect 
+                            label="Condition" 
+                            name="condition" 
+                            value={rule.condition} 
+                            onChange={(e) => updateDataLogicRule(idx, { condition: e.target.value as any })} 
+                            options={[
+                                {value:'equals',label:'Equals'},
+                                {value:'not_equals',label:'Not Equals'},
+                                {value:'contains',label:'Contains Text'},
+                                {value:'greater_than',label:'Is Greater Than'},
+                                {value:'less_than',label:'Is Less Than'},
+                                {value:'is_empty',label:'Is Empty'},
+                                {value:'is_not_empty',label:'Is Not Empty'}
+                            ]} 
+                        />
                         <PropertyInput label="Match Value" name="value" value={rule.value} onChange={(e) => updateDataLogicRule(idx, { value: e.target.value })} />
                         <div className="border-t border-gray-200 my-2 pt-2">
                              <PropertySelect label="Then set..." name="targetProperty" value={rule.targetProperty} onChange={(e) => updateDataLogicRule(idx, { targetProperty: e.target.value as any })} options={[
