@@ -163,9 +163,16 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
       try {
           const suggestions = await getFormSuggestionsFromData(summary);
           
+          const getSmartLabel = (type: string, name?: string, label?: string) => {
+               if (label) return label;
+               if (name) return name.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim().replace(/^\w/, c => c.toUpperCase());
+               return type.charAt(0).toUpperCase() + type.slice(1);
+          };
+
           // Convert simple suggestions to full FormElements with IDs
           const newElements = suggestions.map((s: any) => ({
               ...s,
+              label: getSmartLabel(s.type, s.name, s.label),
               id: `${s.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               styles: { size: 'medium' }
           }));

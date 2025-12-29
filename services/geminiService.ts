@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
 import type { FormElement, ElementStyle } from "../types";
 
 if (!process.env.API_KEY) {
@@ -16,7 +16,7 @@ const responseSchema = {
         type: {
           type: Type.STRING,
           description: "Type of the form field.",
-          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'container', 'accordion', 'news-card', 'navbar', 'date', 'number', 'email', 'tel', 'typography', 'image', 'html-block', 'divider'],
+          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'reset-button', 'container', 'accordion', 'news-card', 'navbar', 'date', 'number', 'email', 'tel', 'typography', 'image', 'html-block', 'divider'],
         },
         subType: {
            type: Type.STRING,
@@ -37,6 +37,34 @@ const responseSchema = {
       },
       required: ["type", "label", "name"],
     },
+};
+
+const styleSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        backgroundColor: { type: Type.STRING },
+        textColor: { type: Type.STRING },
+        borderColor: { type: Type.STRING },
+        borderWidth: { type: Type.STRING },
+        borderRadius: { type: Type.STRING },
+        padding: { type: Type.STRING },
+        margin: { type: Type.STRING },
+        fontSize: { type: Type.STRING },
+        fontWeight: { type: Type.STRING },
+        fontFamily: { type: Type.STRING },
+        boxShadow: { type: Type.STRING },
+        width: { type: Type.STRING },
+        height: { type: Type.STRING },
+        display: { type: Type.STRING, enum: ['block', 'flex', 'grid'] },
+        flexDirection: { type: Type.STRING, enum: ['row', 'column', 'row-reverse', 'column-reverse'] },
+        justifyContent: { type: Type.STRING, enum: ['flex-start', 'center', 'flex-end', 'space-between', 'space-around'] },
+        alignItems: { type: Type.STRING, enum: ['flex-start', 'center', 'flex-end', 'stretch'] },
+        gap: { type: Type.STRING },
+        textAlign: { type: Type.STRING, enum: ['left', 'center', 'right', 'justify'] },
+        color: { type: Type.STRING, enum: ['primary', 'secondary', 'danger'] },
+        size: { type: Type.STRING, enum: ['small', 'medium', 'large'] }
+    },
+    description: "CSS styles and layout configuration"
 };
 
 export const suggestContainerConfig = async (elements: FormElement[]): Promise<{ label: string, styles: ElementStyle }> => {
@@ -187,11 +215,23 @@ export const analyzeFormContext = async (elements: FormElement[]) => {
 export const getStyleSuggestions = async (element: FormElement, stylePrompt?: string): Promise<ElementStyle> => {
     if (!process.env.API_KEY) throw new Error("API key is not configured.");
     const ai = getAI();
+    
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Suggest modern CSS styles for ${element.type} "${element.label}". ${stylePrompt || ""}`,
+        contents: `Design a modern and accessible CSS style configuration for a "${element.label}" (${element.type}) element.
+        User Request: ${stylePrompt || "Modern and accessible CSS styles, focusing on layout, spacing, and typography."}
+
+        Guidelines:
+        - Layout: Use Flexbox or Grid for containers.
+        - Spacing: Use meaningful padding/margin (e.g., 1rem, 16px).
+        - Typography: Ensure readable font sizes and weights.
+        - Accessibility: Ensure high contrast ratios for text colors against backgrounds.
+        - Aesthetics: Modern, flat, or soft-shadow design language unless specified otherwise.
+        
+        Return a valid JSON object matching the requested schema.`,
         config: {
             responseMimeType: "application/json",
+            responseSchema: styleSchema,
             temperature: 0.5,
         },
     });

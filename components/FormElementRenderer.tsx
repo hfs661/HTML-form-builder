@@ -105,12 +105,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       const s = styles || {};
       if (isLayout) {
           return {
-              width: s.width || '100%', // Default to 100% width if not specified
+              width: s.width || '100%', 
               height: s.height,
               minHeight: s.minHeight,
               gridColumn: s.gridColumn,
               gridRow: s.gridRow,
-              flexGrow: s.flexGrow ? Number(s.flexGrow) : 1, // Default flex grow
+              flexGrow: s.flexGrow ? Number(s.flexGrow) : 1,
               flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
               flexBasis: s.flexBasis,
               alignSelf: s.alignSelf,
@@ -146,9 +146,13 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const layoutStyles = getCombinedStyles(true);
   const appearanceStyles = getCombinedStyles(false);
   
+  const hasInteraction = !!onClickScript && !disabled;
+  const interactiveStyle: React.CSSProperties = hasInteraction ? { cursor: 'pointer' } : {};
+
   const containerStyle: React.CSSProperties = preview ? {
       ...layoutStyles,
       ...appearanceStyles,
+      ...interactiveStyle,
       position: 'relative'
   } : {
       ...appearanceStyles,
@@ -193,6 +197,15 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onUpdate?.(id, { label: e.target.value });
   };
+  
+  // Enhanced Key Handler for Accessibility
+  const handleContainerKeyDown = (e: React.KeyboardEvent) => {
+      if (hasInteraction && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          handleButtonClick(e as any);
+      }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === 'Escape') {
       onStopEditing?.();
@@ -268,12 +281,19 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       const title = newsTitle || element.newsTitle || "News Title";
       const content = newsContent || element.newsContent || "News Content";
       return (
-          <div className={`border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow bg-white ${pointerEvents}`} style={containerStyle}>
+          <div 
+            className={`border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow bg-white ${pointerEvents} focus:outline-none focus:ring-2 focus:ring-brand-primary`} 
+            style={containerStyle}
+            role={hasInteraction ? 'button' : undefined}
+            tabIndex={hasInteraction ? 0 : undefined}
+            onClick={hasInteraction ? handleButtonClick : undefined}
+            onKeyDown={handleContainerKeyDown}
+          >
               <img src={displayImage} alt={newsTitle || "News"} className="w-full h-48 object-cover" />
               <div className="p-5">
                   <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{title}</h3>
                   <div className={`text-gray-600 text-sm mb-4 transition-all leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>{content}</div>
-                   <button type="button" onClick={() => setExpanded(!expanded)} className="text-brand-primary text-sm font-semibold hover:text-brand-accent focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary rounded p-1">
+                   <button type="button" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }} className="text-brand-primary text-sm font-semibold hover:text-brand-accent focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary rounded p-1">
                           {expanded ? 'Read Less' : 'Read More'}
                    </button>
               </div>
@@ -317,6 +337,10 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                     alt={altText || element.altText || label} 
                     className={`max-w-full h-auto rounded-md ${pointerEvents}`}
                     style={{...appearanceStyles, width: '100%', height: styles?.height ? '100%' : 'auto', objectFit: 'cover'}}
+                    onClick={hasInteraction ? handleButtonClick : undefined}
+                    onKeyDown={handleContainerKeyDown}
+                    role={hasInteraction ? 'button' : undefined}
+                    tabIndex={hasInteraction ? 0 : undefined}
                 />
             </div>
          );
@@ -331,7 +355,15 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         const defaultStackClass = (!styles?.display || styles.display === 'block') ? 'space-y-4' : '';
         const borderClass = preview ? '' : 'border border-dashed border-gray-300 rounded-lg min-h-[50px] bg-gray-50/50';
         return (
-            <div className={`w-full ${borderClass} ${defaultStackClass} p-4 flex flex-col h-full`} style={containerStyle}>
+            <div 
+                className={`w-full ${borderClass} ${defaultStackClass} p-4 flex flex-col h-full focus:outline-none focus:ring-2 focus:ring-brand-primary`} 
+                style={containerStyle}
+                role={hasInteraction ? 'button' : undefined}
+                tabIndex={hasInteraction ? 0 : undefined}
+                onClick={hasInteraction ? handleButtonClick : undefined}
+                onKeyDown={handleContainerKeyDown}
+                aria-label={label}
+            >
                 {!preview && <div className="mb-2"><label className="block text-sm font-semibold text-gray-700 mb-1 tracking-wide"><EditableLabel /></label></div>}
                 {children}
             </div>

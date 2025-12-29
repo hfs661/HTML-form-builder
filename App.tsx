@@ -11,10 +11,31 @@ import PromptModal from './components/PromptModal';
 import type { FormElement, FormElementType, SnippetItem, ElementStyle } from './types';
 import { getFormSuggestions, analyzeFormContext } from './services/geminiService';
 
+const getSmartLabel = (type: string, name?: string, label?: string) => {
+  if (label && label !== 'New Element') return label;
+  
+  // Try to derive from name if it looks like a custom name (not auto-generated timestamp)
+  if (name && !name.match(/^(el_|group_|ai_group_)\d+$/) && !name.startsWith('col')) {
+      return name.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim().replace(/^\w/, c => c.toUpperCase());
+  }
+  
+  const typeMap: Record<string, string> = {
+      text: 'Text Input', textarea: 'Text Area', number: 'Number Input', 
+      email: 'Email', password: 'Password', date: 'Date Picker',
+      select: 'Dropdown', checkbox: 'Checkbox', radio: 'Radio Group',
+      button: 'Button', 'reset-button': 'Reset Button', file: 'File Upload', 
+      container: 'Container', accordion: 'Accordion', 'news-card': 'News Card',
+      table: 'Data Table', navbar: 'Navigation Bar', iframe: 'Embedded Frame',
+      divider: 'Divider', 'html-block': 'HTML Block', typography: 'Text Block',
+      image: 'Image'
+  };
+  return typeMap[type] || 'New Element';
+};
+
 const createNewElement = (data: any): FormElement => ({
   id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   type: data.type as FormElementType,
-  label: data.label || 'New Element',
+  label: getSmartLabel(data.type, data.name, data.label),
   name: data.name || `el_${Date.now()}`,
   options: data.options,
   children: data.children?.map((c: any) => createNewElement(c)),

@@ -116,10 +116,28 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     }
     
     // If adding a new item
+    const getSmartLabel = (type: string, name?: string, label?: string) => {
+        if (label && label !== 'New Element') return label;
+        if (name && !name.match(/^(el_|group_|ai_group_)\d+$/) && !name.startsWith('col')) {
+             return name.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim().replace(/^\w/, c => c.toUpperCase());
+        }
+        const typeMap: Record<string, string> = {
+            text: 'Text Input', textarea: 'Text Area', number: 'Number Input', 
+            email: 'Email', password: 'Password', date: 'Date Picker',
+            select: 'Dropdown', checkbox: 'Checkbox', radio: 'Radio Group',
+            button: 'Button', 'reset-button': 'Reset Button', file: 'File Upload', 
+            container: 'Container', accordion: 'Accordion', 'news-card': 'News Card',
+            table: 'Data Table', navbar: 'Navigation Bar', iframe: 'Embedded Frame',
+            divider: 'Divider', 'html-block': 'HTML Block', typography: 'Text Block',
+            image: 'Image'
+        };
+        return typeMap[type] || 'New Element';
+    };
+
     const createNewElement = (data: any): FormElement => ({
       id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: data.type as FormElementType,
-      label: data.label || 'New Element',
+      label: getSmartLabel(data.type, data.name, data.label),
       name: data.name || `el_${Date.now()}`,
       options: data.options,
       children: data.children?.map((c: any) => createNewElement(c)),
@@ -291,7 +309,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
             <div className="flex flex-col items-center justify-center h-64 text-gray-400 pointer-events-none animate-fade-in-staggered">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                 <p className="text-xl font-medium text-gray-500">Drag elements here to start building</p>
-                <p className="text-sm opacity-75 mt-2">or select a template from the left</p>
+                <p className="text-xs opacity-75 mt-2">or select a template from the left</p>
             </div>
         )}
         <RecursiveList items={elements} parentId={null} />

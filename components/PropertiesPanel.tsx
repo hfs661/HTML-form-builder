@@ -129,6 +129,8 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGrouping, setIsGrouping] = useState(false);
   const [aiContentPrompt, setAiContentPrompt] = useState('');
+  const [aiStylePrompt, setAiStylePrompt] = useState('');
+  const [aiScriptPrompt, setAiScriptPrompt] = useState('');
 
   const styles = selectedElement?.styles || {};
   const dataLogic = selectedElement?.dataLogic || { rules: [] };
@@ -146,6 +148,37 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
     } finally {
         setIsGenerating(false);
     }
+  };
+
+  const handleAiStyleGenerate = async () => {
+      if (!selectedElement) return;
+      setIsGenerating(true);
+      try {
+          // Provide specific context about modern/accessible styles if prompt is empty
+          const userPrompt = aiStylePrompt.trim() || "modern, accessible design with proper spacing, legible typography, and layout";
+          const prompt = `${userPrompt}. Focus on layout, spacing, and typography.`;
+          const result = await getStyleSuggestions(selectedElement, prompt);
+          updateElement(selectedElement.id, { styles: { ...selectedElement.styles, ...result } });
+      } catch (err) {
+          console.error(err);
+          alert("AI Failed to generate styles.");
+      } finally {
+          setIsGenerating(false);
+      }
+  };
+
+  const handleAiScriptGenerate = async () => {
+      if (!selectedElement || !aiScriptPrompt.trim()) return;
+      setIsGenerating(true);
+      try {
+          const script = await getScriptSuggestions(aiScriptPrompt);
+          updateElement(selectedElement.id, { onClickScript: script });
+      } catch (err) {
+          console.error(err);
+          alert("AI Failed to generate script.");
+      } finally {
+          setIsGenerating(false);
+      }
   };
 
   const handleGroupWithAIMagic = async () => {
@@ -354,6 +387,23 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
 
         {activeTab === 'style' && (
             <div className="space-y-4">
+                <CollapsibleSection title="AI Style Assistant" defaultOpen>
+                    <PropertyTextarea 
+                        label="Describe Desired Style" 
+                        value={aiStylePrompt} 
+                        onChange={(e) => setAiStylePrompt(e.target.value)} 
+                        placeholder="e.g., 'Modern glassmorphism with soft shadows', 'High contrast dark mode', 'Accessible large text layout'" 
+                    />
+                    <button 
+                        onClick={handleAiStyleGenerate} 
+                        disabled={isGenerating} 
+                        className="w-full py-2 bg-purple-600 text-white rounded text-xs font-bold uppercase hover:bg-purple-700 transition-colors shadow-sm active:scale-95 disabled:bg-gray-400"
+                    >
+                        {isGenerating ? 'Designing...' : 'Suggest Styles with AI ✨'}
+                    </button>
+                    {!aiStylePrompt && <p className="text-[10px] text-gray-400 mt-1 italic text-center">Leave empty to use smart modern defaults.</p>}
+                </CollapsibleSection>
+
                 <CollapsibleSection title="Dimensions & Layout" defaultOpen>
                     <div className="grid grid-cols-2 gap-2">
                         <PropertyInput label="Width" name="width" value={styles.width} onChange={(e) => updateElement(selectedElement.id, { styles: { ...styles, width: e.target.value } })} />
@@ -370,7 +420,33 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
 
         {activeTab === 'logic' && (
           <div className="space-y-4">
-              <CollapsibleSection title="Advanced Data Logic" defaultOpen>
+              <CollapsibleSection title="AI Interaction Logic" defaultOpen>
+                  <PropertyTextarea 
+                      label="Describe Click Action" 
+                      value={aiScriptPrompt} 
+                      onChange={(e) => setAiScriptPrompt(e.target.value)} 
+                      placeholder="e.g., 'Log Hello World to console', 'Alert the user with a welcome message', 'Toggle visibility of element ID xyz'" 
+                  />
+                  <button 
+                      onClick={handleAiScriptGenerate} 
+                      disabled={isGenerating || !aiScriptPrompt.trim()} 
+                      className="w-full py-2 bg-purple-600 text-white rounded text-xs font-bold uppercase hover:bg-purple-700 transition-colors shadow-sm active:scale-95 disabled:bg-gray-400"
+                  >
+                      {isGenerating ? 'Coding...' : 'Generate Script with AI ✨'}
+                  </button>
+                  <div className="mt-2">
+                      <PropertyTextarea 
+                          label="Current Script (onClick)" 
+                          value={selectedElement.onClickScript || ''} 
+                          onChange={(e) => updateElement(selectedElement.id, { onClickScript: e.target.value })} 
+                          placeholder="console.log('Clicked');"
+                          rows={3}
+                          fontFamily="monospace"
+                      />
+                  </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Advanced Data Logic">
                 {dataLogic.rules.map((rule, idx) => (
                     <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-md mb-3 relative shadow-sm">
                         <button onClick={() => removeDataLogicRule(idx)} className="absolute top-1 right-1 text-red-500 font-bold hover:scale-110 transition-transform">×</button>
