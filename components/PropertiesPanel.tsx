@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo } from 'react';
-import type { FormElement, DataLogicRule, ValidationLogic, ElementStyle } from '../types';
+import type { FormElement, DataLogicRule, ValidationLogic, ElementStyle, ConditionalRule, BulkAction, ElementLogic, LogicCondition } from '../types';
 import { getStyleSuggestions, getScriptSuggestions, getContentSuggestion, suggestContainerConfig } from '../services/geminiService';
 
 interface PropertiesPanelProps {
@@ -10,7 +9,7 @@ interface PropertiesPanelProps {
   updateElement: (id: string, updatedProps: Partial<FormElement>) => void;
   closePanel: () => void;
   onDuplicate?: (id: string) => void;
-  onGroup?: () => void;
+  onGroup?: (id?: string) => void;
   onGroupWithAI?: (label: string, styles: ElementStyle) => void;
 }
 
@@ -131,10 +130,36 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
   const [aiContentPrompt, setAiContentPrompt] = useState('');
   const [aiStylePrompt, setAiStylePrompt] = useState('');
   const [aiScriptPrompt, setAiScriptPrompt] = useState('');
+  const [scriptType, setScriptType] = useState<'onClick' | 'onChange'>('onClick');
 
   const styles = selectedElement?.styles || {};
   const dataLogic = selectedElement?.dataLogic || { rules: [] };
   const validationLogic = selectedElement?.validationLogic || { triggerId: '', condition: 'matches', value: '', errorMessage: '' };
+  const conditionalRules = selectedElement?.conditionalRules || [];
+  const visibilityLogic = selectedElement?.logic || { triggerId: '', condition: 'equals', value: '', action: 'show' };
+
+  const flattenElements = (elements: FormElement[]): FormElement[] => {
+      let flat: FormElement[] = [];
+      elements.forEach(el => {
+          flat.push(el);
+          if (el.children) flat = flat.concat(flattenElements(el.children));
+      });
+      return flat;
+  };
+  
+  const allFlatElements = useMemo(() => flattenElements(allElements), [allElements]);
+
+  const logicConditions: {value: LogicCondition, label: string}[] = [
+      {value:'equals',label:'Equals'},
+      {value:'not_equals',label:'Does Not Equal'},
+      {value:'contains',label:'Contains'},
+      {value:'starts_with',label:'Starts With'},
+      {value:'ends_with',label:'Ends With'},
+      {value:'greater_than',label:'Greater Than'},
+      {value:'less_than',label:'Less Than'},
+      {value:'is_empty',label:'Is Empty'},
+      {value:'is_not_empty',label:'Is Not Empty'}
+  ];
 
   const handleAiContentGenerate = async () => {
     if (!selectedElement || !aiContentPrompt.trim()) return;
@@ -154,7 +179,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
       if (!selectedElement) return;
       setIsGenerating(true);
       try {
-          // Provide specific context about modern/accessible styles if prompt is empty
           const userPrompt = aiStylePrompt.trim() || "modern, accessible design with proper spacing, legible typography, and layout";
           const prompt = `${userPrompt}. Focus on layout, spacing, and typography.`;
           const result = await getStyleSuggestions(selectedElement, prompt);
@@ -172,7 +196,11 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
       setIsGenerating(true);
       try {
           const script = await getScriptSuggestions(aiScriptPrompt);
-          updateElement(selectedElement.id, { onClickScript: script });
+          if (scriptType === 'onClick') {
+             updateElement(selectedElement.id, { onClickScript: script });
+          } else {
+             updateElement(selectedElement.id, { onChangeScript: script });
+          }
       } catch (err) {
           console.error(err);
           alert("AI Failed to generate script.");
@@ -219,6 +247,46 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
     updateElement(selectedElement!.id, { dataLogic: { ...dataLogic, rules: newRules } });
   };
 
+  const handleAddConditionalRule = () => {
+    const newRule: ConditionalRule = {
+        id: Date.now().toString(),
+        condition: 'equals',
+        matchValue: '',
+        actions: []
+    };
+    updateElement(selectedElement!.id, { conditionalRules: [...conditionalRules, newRule] });
+  };
+
+  const updateConditionalRule = (idx: number, props: Partial<ConditionalRule>) => {
+      const newRules = [...conditionalRules];
+      newRules[idx] = { ...newRules[idx], ...props };
+      updateElement(selectedElement!.id, { conditionalRules: newRules });
+  };
+
+  const removeConditionalRule = (idx: number) => {
+      const newRules = conditionalRules.filter((_, i) => i !== idx);
+      updateElement(selectedElement!.id, { conditionalRules: newRules });
+  };
+  
+  const handleAddBulkAction = (ruleIdx: number) => {
+      const newAction: BulkAction = { targetIds: [], property: 'hidden', value: true };
+      const newRules = [...conditionalRules];
+      newRules[ruleIdx].actions.push(newAction);
+      updateElement(selectedElement!.id, { conditionalRules: newRules });
+  };
+
+  const updateBulkAction = (ruleIdx: number, actionIdx: number, props: Partial<BulkAction>) => {
+      const newRules = [...conditionalRules];
+      newRules[ruleIdx].actions[actionIdx] = { ...newRules[ruleIdx].actions[actionIdx], ...props };
+      updateElement(selectedElement!.id, { conditionalRules: newRules });
+  };
+
+  const removeBulkAction = (ruleIdx: number, actionIdx: number) => {
+      const newRules = [...conditionalRules];
+      newRules[ruleIdx].actions = newRules[ruleIdx].actions.filter((_, i) => i !== actionIdx);
+      updateElement(selectedElement!.id, { conditionalRules: newRules });
+  };
+
   if (selectedIds.length > 1) {
       return (
           <div className="w-full md:w-72 lg:w-80 bg-brand-light-gray h-full flex flex-col border-l border-gray-300 shadow-xl z-20">
@@ -234,7 +302,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                   
                   {onGroup && (
                     <button 
-                        onClick={onGroup} 
+                        onClick={() => onGroup()} 
                         className="w-full py-3 bg-gray-600 text-white rounded-md font-bold text-sm hover:bg-gray-700 transition-all shadow-md mb-2 active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                     >
                         Group Elements
@@ -264,7 +332,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
 
   const isInputType = ['text', 'number', 'date', 'email', 'textarea', 'select', 'inputMask', 'password', 'file'].includes(selectedElement.type);
   const isTextType = ['text', 'textarea', 'email'].includes(selectedElement.type);
-  const isNumberType = ['number', 'range'].includes(selectedElement.type);
+  const isNumberType = ['number', 'range', 'progress', 'rating'].includes(selectedElement.type);
 
   return (
     <div className="w-full md:w-72 lg:w-80 bg-brand-light-gray h-full flex flex-col border-l border-gray-300 shadow-xl z-20">
@@ -286,6 +354,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
              <CollapsibleSection title="General" defaultOpen>
                  <PropertyInput label="Label" name="label" value={selectedElement.label} onChange={(e) => updateElement(selectedElement.id, { label: e.target.value })} />
                  <PropertyInput label="Variable Name" name="name" value={selectedElement.name} onChange={(e) => updateElement(selectedElement.id, { name: e.target.value })} />
+                 <PropertyInput label="Accessibility Label (ARIA)" name="ariaLabel" value={selectedElement.ariaLabel} onChange={(e) => updateElement(selectedElement.id, { ariaLabel: e.target.value })} placeholder="Screen reader text" />
                  
                  {isInputType && (
                      <>
@@ -293,6 +362,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                         <div className="grid grid-cols-2 gap-4 mt-3">
                             <PropertyToggle label="Required" checked={!!selectedElement.required} onChange={(val) => updateElement(selectedElement.id, { required: val })} />
                             <PropertyToggle label="Disabled" checked={!!selectedElement.disabled} onChange={(val) => updateElement(selectedElement.id, { disabled: val })} />
+                            <PropertyToggle label="Hidden" checked={!!selectedElement.hidden} onChange={(val) => updateElement(selectedElement.id, { hidden: val })} />
                         </div>
                      </>
                  )}
@@ -313,6 +383,39 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                     />
                  )}
              </CollapsibleSection>
+
+             {selectedElement.type === 'code-block' && (
+                 <CollapsibleSection title="Code Settings" defaultOpen>
+                    <PropertySelect 
+                        label="Language" 
+                        name="language" 
+                        value={selectedElement.language || 'javascript'} 
+                        onChange={(e) => updateElement(selectedElement.id, { language: e.target.value })} 
+                        options={[
+                            {value:'javascript',label:'JavaScript'},
+                            {value:'python',label:'Python'},
+                            {value:'java',label:'Java'},
+                            {value:'html',label:'HTML'},
+                            {value:'css',label:'CSS'},
+                            {value:'sql',label:'SQL'}
+                        ]} 
+                    />
+                     <PropertyTextarea 
+                        label="Code Content" 
+                        value={selectedElement.code} 
+                        onChange={(e) => updateElement(selectedElement.id, { code: e.target.value })} 
+                        placeholder="print('Hello World')" 
+                        rows={6}
+                        fontFamily="monospace"
+                     />
+                 </CollapsibleSection>
+             )}
+
+             {['video', 'audio', 'image'].includes(selectedElement.type) && (
+                 <CollapsibleSection title="Media Source" defaultOpen>
+                    <PropertyInput label="Source URL (src)" name="src" value={selectedElement.src} onChange={(e) => updateElement(selectedElement.id, { src: e.target.value })} placeholder="https://example.com/media.mp4" />
+                 </CollapsibleSection>
+             )}
 
              {(selectedElement.type === 'htmlContent' || selectedElement.type === 'html-block') && (
                  <CollapsibleSection title="HTML Content" defaultOpen>
@@ -344,8 +447,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                      <div className="grid grid-cols-2 gap-2">
                         <PropertyInput label="Minimum" name="min" type="number" value={selectedElement.min as number} onChange={(e) => updateElement(selectedElement.id, { min: e.target.value })} />
                         <PropertyInput label="Maximum" name="max" type="number" value={selectedElement.max as number} onChange={(e) => updateElement(selectedElement.id, { max: e.target.value })} />
-                        <PropertyInput label="Step" name="step" type="number" value={selectedElement.step} onChange={(e) => updateElement(selectedElement.id, { step: e.target.value ? Number(e.target.value) : undefined })} />
+                        {selectedElement.type === 'number' && <PropertyInput label="Step" name="step" type="number" value={selectedElement.step} onChange={(e) => updateElement(selectedElement.id, { step: e.target.value ? Number(e.target.value) : undefined })} />}
                      </div>
+                     {selectedElement.type === 'progress' && <PropertyInput label="Current Value" name="placeholder" type="number" value={selectedElement.placeholder} onChange={(e) => updateElement(selectedElement.id, { placeholder: e.target.value })} />}
                  </CollapsibleSection>
              )}
              
@@ -365,6 +469,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
              {selectedElement.type === 'select' && (
                  <CollapsibleSection title="Dropdown Configuration" defaultOpen>
                      <PropertyToggle label="Allow Multiple Selections" checked={!!selectedElement.multiple} onChange={(val) => updateElement(selectedElement.id, { multiple: val })} />
+                     <PropertyToggle label="Searchable (Combobox)" checked={!!selectedElement.searchable} onChange={(val) => updateElement(selectedElement.id, { searchable: val })} />
                      <PropertyToggle label="Treat first option as Placeholder?" checked={!!selectedElement.hasPlaceholderOption} onChange={(val) => updateElement(selectedElement.id, { hasPlaceholderOption: val })} />
                      <PropertyTextarea label="Options (one per line)" value={selectedElement.options?.join('\n') || ''} onChange={(e) => updateElement(selectedElement.id, { options: e.target.value.split('\n') })} />
                      <div className="p-2 bg-yellow-50 border border-yellow-100 rounded text-[10px] text-yellow-800 mb-2">
@@ -405,11 +510,29 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                 </CollapsibleSection>
 
                 <CollapsibleSection title="Dimensions & Layout" defaultOpen>
+                    {selectedElement.type === 'bootstrap-col' && (
+                        <div className="mb-3">
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Grid Column Span (1-12)</label>
+                            <select 
+                                className="w-full p-2 text-sm border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary focus:outline-none"
+                                value={Math.round((parseFloat(styles.width || '0') / 100) * 12) || 12}
+                                onChange={(e) => {
+                                    const span = parseInt(e.target.value);
+                                    const width = (span / 12) * 100;
+                                    updateElement(selectedElement.id, { styles: { ...styles, width: `${width}%` } });
+                                }}
+                            >
+                                {Array.from({length: 12}).map((_, i) => (
+                                    <option key={i+1} value={i+1}>{i+1} / 12 ({Math.round(((i+1)/12)*100)}%)</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                         <PropertyInput label="Width" name="width" value={styles.width} onChange={(e) => updateElement(selectedElement.id, { styles: { ...styles, width: e.target.value } })} />
                         <PropertyInput label="Height" name="height" value={styles.height} onChange={(e) => updateElement(selectedElement.id, { styles: { ...styles, height: e.target.value } })} />
                     </div>
-                    <PropertySelect label="Display" name="display" value={styles.display || 'block'} onChange={(e) => updateElement(selectedElement.id, { styles: { ...styles, display: e.target.value as any } })} options={[{value:'block',label:'Block'}, {value:'flex',label:'Flexbox'}, {value:'grid',label:'12-Col Grid'}]} />
+                    <PropertySelect label="Display" name="display" value={styles.display || 'block'} onChange={(e) => updateElement(selectedElement.id, { styles: { ...styles, display: e.target.value as any } })} options={[{value:'block',label:'Block'}, {value:'flex',label:'Flexbox'}, {value:'grid',label:'Grid'}]} />
                 </CollapsibleSection>
                 <CollapsibleSection title="Appearance">
                     <ColorPicker label="Background Color" value={styles.backgroundColor} onChange={(val) => updateElement(selectedElement.id, { styles: { ...styles, backgroundColor: val } })} />
@@ -420,33 +543,194 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
 
         {activeTab === 'logic' && (
           <div className="space-y-4">
-              <CollapsibleSection title="AI Interaction Logic" defaultOpen>
+              <CollapsibleSection title="Visibility Logic (Show/Hide)" defaultOpen>
+                  <p className="text-xs text-gray-500 mb-3">Show this element when:</p>
+                  <PropertySelect label="Trigger Input" name="triggerId" value={visibilityLogic.triggerId} onChange={(e) => updateElement(selectedElement.id, { logic: { ...visibilityLogic, triggerId: e.target.value } })} options={[{value:'',label:'-- Always Visible --'}, ...allElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
+                  {visibilityLogic.triggerId && (
+                      <>
+                        <PropertySelect 
+                            label="Condition" 
+                            name="condition" 
+                            value={visibilityLogic.condition} 
+                            onChange={(e) => updateElement(selectedElement.id, { logic: { ...visibilityLogic, condition: e.target.value as LogicCondition } })} 
+                            options={logicConditions} 
+                        />
+                        {!['is_empty', 'is_not_empty'].includes(visibilityLogic.condition) && (
+                            <PropertyInput label="Value" name="value" value={visibilityLogic.value} onChange={(e) => updateElement(selectedElement.id, { logic: { ...visibilityLogic, value: e.target.value } })} />
+                        )}
+                        <PropertySelect 
+                            label="Action" 
+                            name="action" 
+                            value={visibilityLogic.action} 
+                            onChange={(e) => updateElement(selectedElement.id, { logic: { ...visibilityLogic, action: e.target.value as 'show' | 'hide' } })} 
+                            options={[{value:'show',label:'Show'}, {value:'hide',label:'Hide'}]} 
+                        />
+                      </>
+                  )}
+              </CollapsibleSection>
+
+              <CollapsibleSection title="JavaScript Events" defaultOpen>
+                   <div className="flex border-b border-gray-200 mb-2">
+                        <button 
+                            className={`flex-1 py-1 text-xs font-semibold ${scriptType === 'onClick' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500'}`}
+                            onClick={() => setScriptType('onClick')}
+                        >
+                            On Click
+                        </button>
+                        <button 
+                            className={`flex-1 py-1 text-xs font-semibold ${scriptType === 'onChange' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500'}`}
+                            onClick={() => setScriptType('onChange')}
+                        >
+                            On Change
+                        </button>
+                   </div>
+
                   <PropertyTextarea 
-                      label="Describe Click Action" 
+                      label={`Describe ${scriptType === 'onClick' ? 'Click' : 'Change'} Action`} 
                       value={aiScriptPrompt} 
                       onChange={(e) => setAiScriptPrompt(e.target.value)} 
-                      placeholder="e.g., 'Log Hello World to console', 'Alert the user with a welcome message', 'Toggle visibility of element ID xyz'" 
+                      placeholder={scriptType === 'onClick' ? "e.g., 'Alert the user', 'Toggle visibility of #el_123'" : "e.g., 'Log new value', 'Validate format'"}
                   />
                   <button 
                       onClick={handleAiScriptGenerate} 
                       disabled={isGenerating || !aiScriptPrompt.trim()} 
-                      className="w-full py-2 bg-purple-600 text-white rounded text-xs font-bold uppercase hover:bg-purple-700 transition-colors shadow-sm active:scale-95 disabled:bg-gray-400"
+                      className="w-full py-2 bg-purple-600 text-white rounded text-xs font-bold uppercase hover:bg-purple-700 transition-colors shadow-sm active:scale-95 disabled:bg-gray-400 mb-3"
                   >
                       {isGenerating ? 'Coding...' : 'Generate Script with AI ✨'}
                   </button>
-                  <div className="mt-2">
-                      <PropertyTextarea 
-                          label="Current Script (onClick)" 
-                          value={selectedElement.onClickScript || ''} 
-                          onChange={(e) => updateElement(selectedElement.id, { onClickScript: e.target.value })} 
-                          placeholder="console.log('Clicked');"
-                          rows={3}
-                          fontFamily="monospace"
-                      />
-                  </div>
+                  
+                  {scriptType === 'onClick' ? (
+                      <div>
+                          <p className="text-[10px] text-gray-500 mb-1 font-mono">Available vars: <code>e</code> (Event), <code>id</code>, <code>name</code></p>
+                          <PropertyTextarea 
+                              label="Script (onClick)" 
+                              value={selectedElement.onClickScript || ''} 
+                              onChange={(e) => updateElement(selectedElement.id, { onClickScript: e.target.value })} 
+                              placeholder="alert('Clicked ' + id);"
+                              rows={5}
+                              fontFamily="monospace"
+                          />
+                          {selectedElement.type === 'button' && (
+                              <button 
+                                onClick={() => updateElement(selectedElement.id, { onClickScript: "console.log('Button " + selectedElement.label + " clicked!');" })}
+                                className="text-xs text-brand-primary underline hover:text-brand-accent mb-2"
+                              >
+                                  + Add 'Log to Console' Script
+                              </button>
+                          )}
+                      </div>
+                  ) : (
+                      <div>
+                          <p className="text-[10px] text-gray-500 mb-1 font-mono">Available vars: <code>e</code> (Event), <code>value</code>, <code>id</code>, <code>name</code></p>
+                           <PropertyTextarea 
+                              label="Script (onChange)" 
+                              value={selectedElement.onChangeScript || ''} 
+                              onChange={(e) => updateElement(selectedElement.id, { onChangeScript: e.target.value })} 
+                              placeholder="console.log('New value: ' + value);"
+                              rows={5}
+                              fontFamily="monospace"
+                          />
+                      </div>
+                  )}
               </CollapsibleSection>
 
-              <CollapsibleSection title="Advanced Data Logic">
+              <CollapsibleSection title="Bulk Conditional Logic">
+                  <p className="text-xs text-gray-500 mb-3">
+                      When this element's value changes, apply actions to other elements.
+                  </p>
+                  {conditionalRules.map((rule, ruleIdx) => (
+                      <div key={rule.id} className="p-3 bg-blue-50 border border-blue-200 rounded-md mb-3 relative shadow-sm">
+                          <button onClick={() => removeConditionalRule(ruleIdx)} className="absolute top-1 right-1 text-red-500 font-bold hover:scale-110 transition-transform">×</button>
+                          <div className="mb-2">
+                              <span className="text-xs font-bold text-blue-800 uppercase">When value</span>
+                              <div className="flex space-x-2 mt-1">
+                                  <div className="w-1/2">
+                                    <select 
+                                        value={rule.condition} 
+                                        onChange={(e) => updateConditionalRule(ruleIdx, { condition: e.target.value as any })}
+                                        className="w-full p-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-brand-primary"
+                                    >
+                                        {logicConditions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                    </select>
+                                  </div>
+                                  {!['is_empty', 'is_not_empty'].includes(rule.condition) && (
+                                    <input 
+                                        type="text" 
+                                        value={rule.matchValue} 
+                                        onChange={(e) => updateConditionalRule(ruleIdx, { matchValue: e.target.value })} 
+                                        placeholder="Value..."
+                                        className="w-1/2 p-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-brand-primary"
+                                    />
+                                  )}
+                              </div>
+                          </div>
+                          
+                          <div className="space-y-2 mt-3 pl-2 border-l-2 border-blue-200">
+                                {rule.actions.map((action, actionIdx) => (
+                                    <div key={actionIdx} className="bg-white p-2 rounded border border-gray-200 text-xs">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-semibold text-gray-700">Action {actionIdx + 1}</span>
+                                            <button onClick={() => removeBulkAction(ruleIdx, actionIdx)} className="text-red-400 hover:text-red-600">Remove</button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 mb-2">
+                                            <select 
+                                                value={action.property}
+                                                onChange={(e) => updateBulkAction(ruleIdx, actionIdx, { property: e.target.value as any })}
+                                                className="p-1 border rounded w-full"
+                                            >
+                                                <option value="hidden">Visibility (Hidden)</option>
+                                                <option value="disabled">Disabled</option>
+                                                <option value="required">Required</option>
+                                                <option value="value">Set Value</option>
+                                                <option value="label">Set Label</option>
+                                                <option value="backgroundColor">Background Color</option>
+                                            </select>
+                                            {action.property === 'hidden' || action.property === 'disabled' || action.property === 'required' ? (
+                                                <select 
+                                                    value={String(action.value)} 
+                                                    onChange={(e) => updateBulkAction(ruleIdx, actionIdx, { value: e.target.value === 'true' })}
+                                                    className="p-1 border rounded w-full"
+                                                >
+                                                    <option value="true">True (Yes)</option>
+                                                    <option value="false">False (No)</option>
+                                                </select>
+                                            ) : (
+                                                 <input 
+                                                    type="text" 
+                                                    value={action.value} 
+                                                    onChange={(e) => updateBulkAction(ruleIdx, actionIdx, { value: e.target.value })}
+                                                    className="p-1 border rounded w-full"
+                                                    placeholder="Value..."
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="max-h-32 overflow-y-auto border border-gray-100 bg-gray-50 rounded p-1">
+                                            <p className="text-[10px] text-gray-400 mb-1">Target Elements:</p>
+                                            {allFlatElements.filter(el => el.id !== selectedElement.id).map(el => (
+                                                <div key={el.id} className="flex items-center mb-0.5">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={action.targetIds.includes(el.id)} 
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) updateBulkAction(ruleIdx, actionIdx, { targetIds: [...action.targetIds, el.id] });
+                                                            else updateBulkAction(ruleIdx, actionIdx, { targetIds: action.targetIds.filter(id => id !== el.id) });
+                                                        }} 
+                                                        className="mr-1.5 h-3 w-3"
+                                                    />
+                                                    <span className="truncate text-gray-600">{el.label || el.name} <span className="text-gray-400 text-[10px]">({el.type})</span></span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                <button onClick={() => handleAddBulkAction(ruleIdx)} className="text-xs text-brand-primary font-bold hover:underline">+ Add Action</button>
+                          </div>
+                      </div>
+                  ))}
+                  <button onClick={handleAddConditionalRule} className="w-full py-2 bg-blue-100 text-blue-700 rounded text-xs font-bold uppercase hover:bg-blue-200 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500">+ Add Conditional Rule</button>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Advanced Data Logic (Legacy)">
                 {dataLogic.rules.map((rule, idx) => (
                     <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-md mb-3 relative shadow-sm">
                         <button onClick={() => removeDataLogicRule(idx)} className="absolute top-1 right-1 text-red-500 font-bold hover:scale-110 transition-transform">×</button>
@@ -456,15 +740,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                             name="condition" 
                             value={rule.condition} 
                             onChange={(e) => updateDataLogicRule(idx, { condition: e.target.value as any })} 
-                            options={[
-                                {value:'equals',label:'Equals'},
-                                {value:'not_equals',label:'Not Equals'},
-                                {value:'contains',label:'Contains Text'},
-                                {value:'greater_than',label:'Is Greater Than'},
-                                {value:'less_than',label:'Is Less Than'},
-                                {value:'is_empty',label:'Is Empty'},
-                                {value:'is_not_empty',label:'Is Not Empty'}
-                            ]} 
+                            options={logicConditions} 
                         />
                         <PropertyInput label="Match Value" name="value" value={rule.value} onChange={(e) => updateDataLogicRule(idx, { value: e.target.value })} />
                         <div className="border-t border-gray-200 my-2 pt-2">
@@ -479,14 +755,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                         </div>
                     </div>
                 ))}
-                <button onClick={handleAddDataLogicRule} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded text-xs font-bold uppercase hover:bg-white transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary">+ Add New Data Rule</button>
-              </CollapsibleSection>
-
-              <CollapsibleSection title="Cross-Field Validation">
-                  <PropertySelect label="Compare against field..." name="triggerId" value={validationLogic.triggerId} onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, triggerId: e.target.value } })} options={[{value:'',label:'-- Select Field --'}, ...allElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
-                  <PropertySelect label="Condition" name="condition" value={validationLogic.condition} onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, condition: e.target.value as any } })} options={[{value:'matches',label:'Value must match field'},{value:'not_equals',label:'Value must be different'},{value:'regex',label:'Match custom pattern (Regex)'},{value:'greater_than',label:'Must be greater than field'},{value:'less_than',label:'Must be less than field'}]} />
-                  <PropertyInput label="Value / Pattern" name="value" value={validationLogic.value} onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, value: e.target.value } })} />
-                  <PropertyInput label="Custom Error Message" name="errorMessage" value={validationLogic.errorMessage} onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, errorMessage: e.target.value } })} />
+                <button onClick={handleAddDataLogicRule} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded text-xs font-bold uppercase hover:border-brand-primary hover:text-brand-primary transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary">+ Add Data Logic Rule</button>
               </CollapsibleSection>
           </div>
         )}

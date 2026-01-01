@@ -7,7 +7,9 @@ export type FormElementType =
   | 'iframe' | 'navbar' | 'news-card' | 'container' | 'script' 
   | 'html-block' | 'typography' | 'image' | 'divider' | 'accordion' | 'reset-button'
   | 'inputMask' | 'dataLogic' | 'validationLogic' | 'htmlContent' 
-  | 'newsTitle' | 'newsContent' | 'newsImage' | 'altText' | 'headingLevel';
+  | 'newsTitle' | 'newsContent' | 'newsImage' | 'altText' | 'headingLevel'
+  | 'video' | 'audio' | 'progress' | 'rating' | 'toggle' | 'rich-text' | 'code-block'
+  | 'bootstrap-row' | 'bootstrap-col';
 
 export interface ElementStyle {
   color?: 'primary' | 'secondary' | 'danger';
@@ -16,6 +18,7 @@ export interface ElementStyle {
   height?: string;
   minHeight?: string;
   width?: string;
+  minWidth?: string;
   maxWidth?: string;
   margin?: string;
   marginTop?: string;
@@ -52,31 +55,46 @@ export interface ElementStyle {
   focusBoxShadow?: string;
 }
 
+export type LogicCondition = 'equals' | 'not_equals' | 'contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+
 export interface ElementLogic {
   triggerId: string;
   action: 'show' | 'hide';
-  condition: 'equals' | 'not_equals' | 'contains';
+  condition: LogicCondition;
   value: string;
 }
 
 export interface ValidationLogic {
     triggerId: string;
-    condition: 'equals' | 'not_equals' | 'matches' | 'contains' | 'regex' | 'greater_than' | 'less_than' | 'prohibited';
-    value: string; // Static value, Regex pattern, or comma-separated prohibited values
+    condition: LogicCondition | 'matches' | 'regex' | 'prohibited';
+    value: string; 
     errorMessage: string;
 }
 
 export interface DataLogicRule {
     triggerId: string;
-    condition: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+    condition: LogicCondition;
     value: string;
-    result: string; // The value to set on the target property
-    targetProperty: 'value' | 'disabled' | 'required' | 'label' | 'options';
+    result: string;
+    targetProperty: 'value' | 'disabled' | 'required' | 'label' | 'options' | 'hidden';
 }
 
 export interface DataLogic {
     rules: DataLogicRule[];
     defaultValue?: string;
+}
+
+export interface BulkAction {
+    targetIds: string[];
+    property: 'hidden' | 'disabled' | 'required' | 'value' | 'label' | 'backgroundColor';
+    value: any;
+}
+
+export interface ConditionalRule {
+    id: string;
+    condition: LogicCondition;
+    matchValue: string;
+    actions: BulkAction[];
 }
 
 export type PartialFormElement = Partial<Omit<FormElement, 'children'>> & {
@@ -92,6 +110,7 @@ export interface FormElement {
   options?: string[];
   required?: boolean;
   disabled?: boolean;
+  hidden?: boolean;
   multiple?: boolean;
   children?: FormElement[];
   subType?: 'text' | 'email' | 'password' | 'tel' | 'url';
@@ -106,8 +125,9 @@ export interface FormElement {
   inputMask?: string;
   validationLogic?: ValidationLogic;
   dataLogic?: DataLogic;
+  conditionalRules?: ConditionalRule[];
   styles?: ElementStyle;
-  logic?: ElementLogic;
+  logic?: ElementLogic; // Pull logic (Visibility)
   src?: string;
   rowCount?: number;
   colCount?: number;
@@ -116,6 +136,7 @@ export interface FormElement {
   brand?: string;
   scriptContent?: string;
   onClickScript?: string;
+  onChangeScript?: string;
   htmlContent?: string;
   headingLevel?: string;
   textContent?: string;
@@ -126,6 +147,15 @@ export interface FormElement {
   // New props for accurate validation
   hasPlaceholderOption?: boolean;
   prohibitedValues?: string[];
+  // New props for code/media
+  language?: string;
+  code?: string;
+  // For standalone logic elements
+  targetId?: string;
+  // Accessibility
+  ariaLabel?: string;
+  // Searchable select
+  searchable?: boolean;
 }
 
 export interface PaletteItem {

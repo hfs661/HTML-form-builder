@@ -12,7 +12,7 @@ interface CanvasProps {
 }
 
 const TrashIcon: React.FC<{onClick: (e: React.MouseEvent) => void}> = ({onClick}) => (
-    <button onClick={onClick} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-opacity opacity-0 group-hover:opacity-100 z-10 focus:outline-none focus:opacity-100 shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
+    <button onClick={onClick} className="absolute top-2 right-2 p-1.5 bg-white text-red-500 border border-gray-200 rounded shadow-sm hover:bg-red-50 hover:border-red-200 transition-all opacity-0 group-hover:opacity-100 z-20 focus:outline-none focus:opacity-100 transform scale-90 hover:scale-100"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
 );
 
 const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, selectedIds, updateElement }) => {
@@ -53,11 +53,15 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     const handleMouseMove = (e: MouseEvent) => {
         const deltaX = e.clientX - resizing.startX;
         const deltaY = e.clientY - resizing.startY;
+        // For columns, we prioritize width. For others, both.
+        const newWidth = Math.max(50, resizing.startW + deltaX);
+        const newHeight = Math.max(20, resizing.startH + deltaY);
+        
         updateElement(resizing.id, { 
             styles: { 
                 ...elements.find(el => el.id === resizing.id)?.styles,
-                width: `${Math.max(50, resizing.startW + deltaX)}px`, 
-                height: `${Math.max(20, resizing.startH + deltaY)}px` 
+                width: `${newWidth}px`, 
+                height: `${newHeight}px` 
             } 
         });
     };
@@ -75,37 +79,48 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
       setResizing({ id: element.id, startX: e.clientX, startY: e.clientY, startW: rect.width, startH: rect.height });
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetParentId: string | null, dropIndex: number) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, passedTargetParentId: string | null, passedDropIndex: number) => {
     e.preventDefault(); 
-    e.stopPropagation(); // Critical to stop parent containers from also accepting
+    e.stopPropagation(); 
     setIsDragging(false);
+    
+    // Prefer dragOverTarget if it exists and matches the context, otherwise use passed args
+    const targetParentId = dragOverTarget ? dragOverTarget.parentId : passedTargetParentId;
+    const dropIndex = dragOverTarget ? dragOverTarget.index : passedDropIndex;
+
     setDragOverTarget(null);
     
     const itemData = e.dataTransfer.getData('application/json');
     if (!itemData) return;
-    const draggedItem = JSON.parse(itemData);
+    
+    let draggedItem;
+    try {
+        draggedItem = JSON.parse(itemData);
+    } catch(err) {
+        console.error("Failed to parse dropped item", err);
+        return;
+    }
 
     // If moving an existing item
     if (draggedItem.id) {
         setElements((prev) => {
-             // Don't drop on self
              if (draggedItem.id === targetParentId) return prev;
-             
              const found = findNodeParent(prev, draggedItem.id);
              if (!found) return prev;
              
-             // Remove from old location
              let newTree = recursiveDelete(prev, draggedItem.id);
              
-             // Adjust index if moving within same container
              let finalIndex = dropIndex;
+             // Adjust index if moving within the same parent
              if (found.parentId === targetParentId) {
-                 const oldIndex = (found.parentId === null ? prev : prev.find(n => n.id === found.parentId)?.children || []).findIndex(x => x.id === draggedItem.id);
+                 // Get the list of children of the parent (or root list)
+                 const siblings = found.parentId === null ? prev : prev.find(n => n.id === found.parentId)?.children || [];
+                 const oldIndex = siblings.findIndex(x => x.id === draggedItem.id);
+                 // If we are moving downwards in the same list, the index shifts by 1 because the item is removed first
                  if (oldIndex < dropIndex) finalIndex--;
              }
              if (finalIndex < 0) finalIndex = 0;
 
-             // Add to new location
              return recursiveUpdate(newTree, targetParentId, (list) => {
                  const newList = [...list];
                  newList.splice(finalIndex, 0, found.node);
@@ -129,16 +144,22 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
             container: 'Container', accordion: 'Accordion', 'news-card': 'News Card',
             table: 'Data Table', navbar: 'Navigation Bar', iframe: 'Embedded Frame',
             divider: 'Divider', 'html-block': 'HTML Block', typography: 'Text Block',
-            image: 'Image'
+            image: 'Image', 'bootstrap-row': 'Flex Row', 'bootstrap-col': 'Flex Column'
         };
         return typeMap[type] || 'New Element';
+    };
+
+    const generateUniqueName = (type: string, providedName?: string) => {
+        const genericNames = ['text', 'container', 'button', 'header', 'row', 'col', 'bootstrap-row', 'bootstrap-col', 'textarea', 'select', 'checkbox', 'radio', 'image'];
+        if (providedName && !genericNames.includes(providedName)) return providedName;
+        return `${type}_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 4)}`;
     };
 
     const createNewElement = (data: any): FormElement => ({
       id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: data.type as FormElementType,
       label: getSmartLabel(data.type, data.name, data.label),
-      name: data.name || `el_${Date.now()}`,
+      name: generateUniqueName(data.type, data.name),
       options: data.options,
       children: data.children?.map((c: any) => createNewElement(c)),
       styles: { size: 'medium', ...(data.styles || {}) },
@@ -156,17 +177,22 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     }));
   };
 
-  const handleDragOverElement = (e: React.DragEvent<HTMLDivElement>, parentId: string | null, index: number, elementId: string) => {
+  const handleDragOverElement = (e: React.DragEvent<HTMLDivElement>, parentId: string | null, index: number, elementId: string, layoutDirection: 'row' | 'column') => {
     e.preventDefault(); 
-    e.stopPropagation(); // Critical!
+    e.stopPropagation(); 
     setIsDragging(true);
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const isAfter = e.clientY > midY;
     
-    // If hovering an empty container, or specific types, we might want to drop *inside*
-    // but here we are handling the 'between' logic on the wrapper.
+    // Determine position based on layout direction of the parent
+    let isAfter = false;
+    if (layoutDirection === 'row') {
+        const midX = rect.left + rect.width / 2;
+        isAfter = e.clientX > midX;
+    } else {
+        const midY = rect.top + rect.height / 2;
+        isAfter = e.clientY > midY;
+    }
     
     setDragOverTarget({ 
         parentId, 
@@ -179,7 +205,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(true);
-      // Appending to the end of the container
       setDragOverTarget({
           parentId: elementId,
           index: currentLength,
@@ -205,34 +230,43 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
       }
   };
 
-  const RecursiveList = ({ items, parentId }: { items: FormElement[], parentId: string | null }) => {
+  const RecursiveList = ({ items, parentId, layoutDirection = 'column' }: { items: FormElement[], parentId: string | null, layoutDirection?: 'row' | 'column' }) => {
       return (
           <>
             {items.map((element, index) => {
                 const isSelected = selectedIds.includes(element.id);
                 const s = element.styles || {};
+                
+                // Determine children layout direction
+                let childLayoutDirection: 'row' | 'column' = 'column';
+                if (element.type === 'bootstrap-row' || (s.display === 'flex' && s.flexDirection === 'row')) {
+                    childLayoutDirection = 'row';
+                }
+
+                // Wrapper Styles Logic:
                 const wrapperStyle: React.CSSProperties = { 
                     width: s.width, 
                     height: s.height, 
                     gridColumn: s.gridColumn, 
                     gridRow: s.gridRow, 
                     flexGrow: s.flexGrow ? Number(s.flexGrow) : undefined,
-                    marginBottom: '8px' // spacing between items
+                    flexShrink: s.flexShrink ? Number(s.flexShrink) : undefined,
+                    flexBasis: s.flexBasis,
+                    alignSelf: s.alignSelf,
+                    marginBottom: layoutDirection === 'column' ? '12px' : '0',
+                    marginRight: layoutDirection === 'row' ? '0' : '0',
                 };
 
-                // Check if the drop target is immediately before this item
                 const showDropBefore = dragOverTarget?.parentId === parentId && dragOverTarget?.index === index && dragOverTarget?.position === 'before';
-                // Check if the drop target is immediately after this item
                 const showDropAfter = dragOverTarget?.parentId === parentId && dragOverTarget?.index === index + 1 && dragOverTarget?.position === 'after';
 
                 return (
-                  <div key={element.id} style={wrapperStyle} className="relative transition-all duration-200">
+                  <div key={element.id} style={wrapperStyle} className={`relative transition-all duration-200 ${layoutDirection === 'column' ? 'last:mb-0' : ''}`}>
                      
-                     {/* Drop Indicator - Before */}
                      {showDropBefore && (
-                        <div className="absolute -top-3 left-0 right-0 h-1.5 z-50 pointer-events-none flex items-center justify-center animate-fade-in-staggered">
-                            <div className="w-full h-[3px] bg-brand-primary shadow-lg relative rounded-full">
-                                 <div className="absolute left-0 -top-1.5 w-3.5 h-3.5 bg-brand-primary rounded-full shadow-sm transform -translate-x-1/2 border-2 border-white"></div>
+                        <div className={`absolute z-50 pointer-events-none flex items-center justify-center ${layoutDirection === 'row' ? 'top-0 bottom-0 -left-1.5 w-3' : '-top-3 left-0 right-0 h-1.5'}`}>
+                            <div className={`${layoutDirection === 'row' ? 'h-full w-[3px]' : 'w-full h-[3px]'} bg-brand-primary shadow-lg relative rounded-full`}>
+                                 <div className={`absolute ${layoutDirection === 'row' ? 'top-0 -left-1.5' : 'left-0 -top-1.5'} w-3.5 h-3.5 bg-brand-primary rounded-full shadow-sm transform -translate-x-1/2 border-2 border-white`}></div>
                             </div>
                         </div>
                      )}
@@ -242,30 +276,34 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                         onClick={(e) => { e.stopPropagation(); handleSelect(element.id, e.ctrlKey || e.metaKey || e.shiftKey); }}
                         onDoubleClick={(e) => { e.stopPropagation(); handleSelect(element.id, false); setEditingElementId(element.id); }}
                         onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify(element)); setIsDragging(true); }}
-                        onDragOver={(e) => handleDragOverElement(e, parentId, index, element.id)}
-                        onDrop={(e) => handleDrop(e, parentId, dragOverTarget?.index ?? index)} // Use the calculated index from dragOver
+                        onDragOver={(e) => handleDragOverElement(e, parentId, index, element.id, layoutDirection)}
+                        onDrop={(e) => handleDrop(e, parentId, dragOverTarget?.index ?? index)}
                         onKeyDown={(e) => handleKeyDown(e, element.id)}
                         tabIndex={0}
                         role="button"
                         aria-label={`Select ${element.label}`}
-                        className={`group relative p-4 border rounded-md cursor-grab active:cursor-grabbing transition-all duration-150 outline-none 
-                            ${isSelected ? 'border-brand-primary ring-2 ring-brand-primary ring-offset-1 z-10' : 'border-gray-300 hover:border-gray-400 focus:border-brand-primary focus:ring-2 focus:ring-brand-primary focus:ring-opacity-50'} 
-                            ${dragOverTarget?.parentId === parentId && (dragOverTarget?.index === index || dragOverTarget?.index === index + 1) ? 'bg-blue-50/50' : 'bg-white'} 
-                            h-full shadow-sm hover:shadow-md`}
+                        className={`group relative p-1 rounded transition-all duration-150 outline-none
+                            ${isSelected ? 'ring-2 ring-brand-primary ring-offset-2 z-10' : 'hover:ring-1 hover:ring-gray-300'} 
+                            ${dragOverTarget?.parentId === parentId && (dragOverTarget?.index === index || dragOverTarget?.index === index + 1) ? 'opacity-80' : ''}`}
                      >
                         <FormElementRenderer element={element} isEditing={editingElementId === element.id} onStartEditing={setEditingElementId} onStopEditing={() => setEditingElementId(null)} onUpdate={updateElement}>
-                            {['container', 'accordion'].includes(element.type) && (
-                                <div className="min-h-[40px] pt-2 flex flex-col h-full">
-                                    <RecursiveList items={element.children || []} parentId={element.id} />
-                                    
-                                    {/* Container Append Zone */}
+                            {['container', 'accordion', 'bootstrap-row', 'bootstrap-col'].includes(element.type) && (
+                                <div className={`min-h-[40px] pt-2 flex ${childLayoutDirection === 'row' ? 'flex-row flex-wrap gap-2' : 'flex-col'} h-full w-full`}>
+                                    <RecursiveList items={element.children || []} parentId={element.id} layoutDirection={childLayoutDirection} />
                                     <div 
-                                        className={`flex-grow min-h-[30px] border-2 border-dashed rounded flex items-center justify-center text-xs font-medium transition-colors mt-2 
-                                            ${dragOverTarget?.parentId === element.id && dragOverTarget?.position === 'inside' ? 'border-brand-primary bg-blue-50 text-brand-primary' : 'border-gray-200 text-gray-400 hover:border-gray-300'}`} 
+                                        className={`flex-grow min-h-[30px] border border-dashed rounded flex items-center justify-center text-xs font-medium transition-colors mt-2 mx-1 cursor-pointer
+                                            ${dragOverTarget?.parentId === element.id && dragOverTarget?.position === 'inside' ? 'border-brand-primary bg-blue-50 text-brand-primary' : 'border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400 hover:bg-gray-50'}
+                                            ${childLayoutDirection === 'row' ? 'min-w-[50px] w-auto' : 'w-full'}`} 
                                         onDragOver={(e) => handleDragOverContainer(e, element.id, element.children?.length || 0)} 
                                         onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Select parent to indicate intent to add to it
+                                            handleSelect(element.id);
+                                        }}
+                                        title="Drop here or select to add via sidebar"
                                     >
-                                        {element.children && element.children.length === 0 ? "Drop items inside" : (isDragging ? "Drop here to append" : "")}
+                                        {element.children && element.children.length === 0 ? "+" : (isDragging ? "+" : "")}
                                     </div>
                                 </div>
                             )}
@@ -282,11 +320,10 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                         <TrashIcon onClick={(e) => { e.stopPropagation(); setElements(prev => recursiveDelete(prev, element.id)); setSelectedIds([]); }} />
                      </div>
 
-                     {/* Drop Indicator - After */}
                      {showDropAfter && (
-                        <div className="absolute -bottom-3 left-0 right-0 h-1.5 z-50 pointer-events-none flex items-center justify-center animate-fade-in-staggered">
-                            <div className="w-full h-[3px] bg-brand-primary shadow-lg relative rounded-full">
-                                 <div className="absolute left-0 -top-1.5 w-3.5 h-3.5 bg-brand-primary rounded-full shadow-sm transform -translate-x-1/2 border-2 border-white"></div>
+                        <div className={`absolute z-50 pointer-events-none flex items-center justify-center ${layoutDirection === 'row' ? 'top-0 bottom-0 -right-1.5 w-3' : '-bottom-3 left-0 right-0 h-1.5'}`}>
+                            <div className={`${layoutDirection === 'row' ? 'h-full w-[3px]' : 'w-full h-[3px]'} bg-brand-primary shadow-lg relative rounded-full`}>
+                                 <div className={`absolute ${layoutDirection === 'row' ? 'top-0 -left-1.5' : 'left-0 -top-1.5'} w-3.5 h-3.5 bg-brand-primary rounded-full shadow-sm transform -translate-x-1/2 border-2 border-white`}></div>
                             </div>
                         </div>
                      )}
@@ -299,24 +336,32 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
 
   return (
     <div 
-        className="flex-1 p-6 md:p-8 lg:p-12 min-h-full" 
+        className="flex-1 p-8 overflow-y-auto bg-gray-100/50" 
         onClick={() => setSelectedIds([])} 
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); setDragOverTarget({ parentId: null, index: elements.length, position: 'inside' }); }} 
         onDrop={(e) => handleDrop(e, null, elements.length)}
     >
-      <div className={`p-6 min-h-[600px] border-2 border-dashed rounded-xl transition-all duration-300 space-y-4 shadow-sm bg-white ${dragOverTarget?.parentId === null ? 'border-brand-primary bg-blue-50/10' : 'border-gray-200'}`}>
+      <div 
+        className={`max-w-4xl mx-auto min-h-[800px] bg-white shadow-xl rounded-lg transition-all duration-300 relative border border-gray-200
+            ${dragOverTarget?.parentId === null ? 'ring-2 ring-brand-primary ring-offset-4 ring-offset-gray-100' : ''}`}
+        style={{ padding: '40px' }} 
+      >
         {elements.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-400 pointer-events-none animate-fade-in-staggered">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                <p className="text-xl font-medium text-gray-500">Drag elements here to start building</p>
-                <p className="text-xs opacity-75 mt-2">or select a template from the left</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300 pointer-events-none">
+                <div className="w-20 h-20 border-2 border-dashed border-gray-300 rounded-full flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                </div>
+                <p className="text-lg font-medium">Drag and drop elements to build your form</p>
+                <p className="text-sm">or click elements in the sidebar</p>
             </div>
         )}
-        <RecursiveList items={elements} parentId={null} />
         
-        {/* Main Canvas Append Zone */}
-        <div className={`h-24 w-full rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium text-gray-400 transition-colors ${dragOverTarget?.parentId === null ? 'border-brand-primary text-brand-primary bg-blue-50' : 'border-gray-100 bg-gray-50/50 hover:border-gray-300'}`}>
-            {isDragging ? "Drop here to append to bottom" : ""}
+        <RecursiveList items={elements} parentId={null} layoutDirection="column" />
+        
+        <div className={`h-16 w-full rounded border-2 border-dashed mt-4 flex items-center justify-center text-sm font-medium transition-all
+            ${isDragging ? 'opacity-100' : 'opacity-0 pointer-events-none h-0 mt-0'}
+            ${dragOverTarget?.parentId === null ? 'border-brand-primary text-brand-primary bg-blue-50' : 'border-gray-200 text-gray-300'}`}>
+            Drop here to append to bottom
         </div>
       </div>
     </div>

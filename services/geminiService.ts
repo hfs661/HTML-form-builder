@@ -16,7 +16,7 @@ const responseSchema = {
         type: {
           type: Type.STRING,
           description: "Type of the form field.",
-          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'reset-button', 'container', 'accordion', 'news-card', 'navbar', 'date', 'number', 'email', 'tel', 'typography', 'image', 'html-block', 'divider'],
+          enum: ['text', 'textarea', 'checkbox', 'radio', 'select', 'button', 'reset-button', 'container', 'accordion', 'news-card', 'navbar', 'date', 'number', 'email', 'tel', 'typography', 'image', 'html-block', 'divider', 'video', 'audio', 'progress', 'rating', 'toggle', 'rich-text', 'code-block', 'bootstrap-row', 'bootstrap-col'],
         },
         subType: {
            type: Type.STRING,
@@ -32,8 +32,12 @@ const responseSchema = {
         required: { type: Type.BOOLEAN },
         textContent: { type: Type.STRING, description: "Content for typography elements" },
         headingLevel: { type: Type.STRING, description: "h1-h6 or p for typography" },
-        src: { type: Type.STRING, description: "Source URL for images" },
-        altText: { type: Type.STRING, description: "Alt text for images" }
+        src: { type: Type.STRING, description: "Source URL for images/media" },
+        altText: { type: Type.STRING, description: "Alt text for images" },
+        code: { type: Type.STRING, description: "Source code for code blocks" },
+        language: { type: Type.STRING, description: "Language for code blocks" },
+        onClickScript: { type: Type.STRING, description: "JavaScript Code for onClick event" },
+        onChangeScript: { type: Type.STRING, description: "JavaScript Code for onChange event" }
       },
       required: ["type", "label", "name"],
     },
@@ -55,6 +59,7 @@ const styleSchema: Schema = {
         boxShadow: { type: Type.STRING },
         width: { type: Type.STRING },
         height: { type: Type.STRING },
+        minWidth: { type: Type.STRING },
         display: { type: Type.STRING, enum: ['block', 'flex', 'grid'] },
         flexDirection: { type: Type.STRING, enum: ['row', 'column', 'row-reverse', 'column-reverse'] },
         justifyContent: { type: Type.STRING, enum: ['flex-start', 'center', 'flex-end', 'space-between', 'space-around'] },
@@ -147,7 +152,7 @@ export const getFormSuggestions = async (prompt: string, useGoogleSearch: boolea
             Description: "${prompt}"
 
             Your response must be ONLY a valid JSON array of objects. Do not include markdown backticks.
-            Properties: "type" (one of: text, textarea, checkbox, radio, select, button, date, number, typography, image, news-card, container, divider), "subType", "label", "name", "placeholder", "options", "required", "textContent", "headingLevel".`;
+            Properties: "type" (one of: text, textarea, checkbox, radio, select, button, date, number, typography, image, news-card, container, divider, video, audio, code-block), "subType", "label", "name", "placeholder", "options", "required", "textContent", "headingLevel", "onClickScript", "onChangeScript".`;
 
             const response = await ai.models.generateContent({
                 model: "gemini-3-flash-preview",

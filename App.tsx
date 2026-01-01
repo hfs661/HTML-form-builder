@@ -14,7 +14,6 @@ import { getFormSuggestions, analyzeFormContext } from './services/geminiService
 const getSmartLabel = (type: string, name?: string, label?: string) => {
   if (label && label !== 'New Element') return label;
   
-  // Try to derive from name if it looks like a custom name (not auto-generated timestamp)
   if (name && !name.match(/^(el_|group_|ai_group_)\d+$/) && !name.startsWith('col')) {
       return name.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim().replace(/^\w/, c => c.toUpperCase());
   }
@@ -27,16 +26,22 @@ const getSmartLabel = (type: string, name?: string, label?: string) => {
       container: 'Container', accordion: 'Accordion', 'news-card': 'News Card',
       table: 'Data Table', navbar: 'Navigation Bar', iframe: 'Embedded Frame',
       divider: 'Divider', 'html-block': 'HTML Block', typography: 'Text Block',
-      image: 'Image'
+      image: 'Image', 'bootstrap-row': 'Flex Row', 'bootstrap-col': 'Flex Column'
   };
   return typeMap[type] || 'New Element';
+};
+
+const generateUniqueName = (type: string, providedName?: string) => {
+    const genericNames = ['text', 'container', 'button', 'header', 'row', 'col', 'bootstrap-row', 'bootstrap-col', 'textarea', 'select', 'checkbox', 'radio', 'image'];
+    if (providedName && !genericNames.includes(providedName)) return providedName;
+    return `${type}_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 4)}`;
 };
 
 const createNewElement = (data: any): FormElement => ({
   id: `${data.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   type: data.type as FormElementType,
   label: getSmartLabel(data.type, data.name, data.label),
-  name: data.name || `el_${Date.now()}`,
+  name: generateUniqueName(data.type, data.name),
   options: data.options,
   children: data.children?.map((c: any) => createNewElement(c)),
   styles: { size: 'medium', ...(data.styles || {}) },
@@ -68,6 +73,7 @@ const App: React.FC = () => {
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatedPrompt, setGeneratedPrompt] = useState('');
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false); // Default minimized
   const [aiPrompt, setAiPrompt] = useState('');
   const [suggestedElements, setSuggestedElements] = useState<Partial<FormElement>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -174,8 +180,8 @@ const App: React.FC = () => {
   }, [historyIndex]);
 
   const deepCloneWithNewIds = (element: FormElement): FormElement => {
-      const newId = `${element.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const newChildren = element.children ? element.children.map(deepCloneWithNewIds) : undefined;
+      const newId = `${element.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      newChildren = element.children ? element.children.map(deepCloneWithNewIds) : undefined;
       return {
           ...element,
           id: newId,
@@ -203,6 +209,39 @@ const App: React.FC = () => {
   const handleAddElement = (data: any) => {
       updateFormElementsWithHistory(prev => {
           const elementsToAdd = data.isSnippet ? data.elements.map(createNewElement) : [createNewElement(data)];
+          
+          if (selectedIds.length === 1) {
+              const targetId = selectedIds[0];
+              const findAndInsert = (list: FormElement[]): FormElement[] => {
+                  // Check if target is a container
+                  for (let i = 0; i < list.length; i++) {
+                      if (list[i].id === targetId) {
+                          if (['container', 'bootstrap-row', 'bootstrap-col', 'accordion'].includes(list[i].type)) {
+                              // Insert inside at the end
+                              return list.map((item, idx) => idx === i ? { ...item, children: [...(item.children || []), ...elementsToAdd] } : item);
+                          } else {
+                              // Insert after
+                              const newList = [...list];
+                              newList.splice(i + 1, 0, ...elementsToAdd);
+                              return newList;
+                          }
+                      }
+                      if (list[i].children) {
+                          const result = findAndInsert(list[i].children!);
+                          if (result !== list[i].children) {
+                              return list.map((item, idx) => idx === i ? { ...item, children: result } : item);
+                          }
+                      }
+                  }
+                  return list;
+              };
+              
+              const newList = findAndInsert(prev);
+              // If nothing changed (ID not found?), fallback to append
+              if (newList === prev) return [...prev, ...elementsToAdd];
+              return newList;
+          }
+
           return [...prev, ...elementsToAdd];
       });
   };
@@ -321,35 +360,6 @@ const App: React.FC = () => {
       return find(formElements);
   }, [selectedIds, formElements]);
 
-  const generatePrompt = (elements: FormElement[]): string => {
-    let prompt = "Create a complete, responsive, and accessible HTML/CSS form based on the following detailed specifications. Use Tailwind CSS for styling.\n\n### Form Structure:\n";
-    
-    const describeElement = (el: FormElement, depth: number = 0, index: number): string => {
-      const indent = "  ".repeat(depth);
-      let desc = `${indent}${index + 1}. **${el.label}** (${el.type})`;
-      
-      const details = [];
-      if (el.name) details.push(`name="${el.name}"`);
-      if (el.placeholder) details.push(`placeholder="${el.placeholder}"`);
-      if (el.required) details.push(`required`);
-      if (el.subType) details.push(`type="${el.subType}"`);
-      if (el.options) details.push(`options=[${el.options.join(', ')}]`);
-      if (el.htmlContent) details.push(`content="Custom HTML Block"`);
-      
-      if (details.length > 0) desc += ` - [${details.join(', ')}]`;
-      
-      if (el.children && el.children.length > 0) {
-        desc += `\n${indent}   *Container Contents:*`;
-        desc += "\n" + el.children.map((c, i) => describeElement(c, depth + 1, i)).join("\n");
-      }
-      return desc;
-    };
-  
-    prompt += elements.map((e, i) => describeElement(e, 0, i)).join("\n");
-    prompt += "\n\n### Requirements:\n- Use semantic HTML tags.\n- Ensure high accessibility contrast.\n- Include form validation logic matching the 'required' and type attributes.\n- Layout should be clean and modern.";
-    return prompt;
-  };
-
   const generateHTML = (elements: FormElement[]) => {
       const lines: string[] = [];
       if (elements === formElements) lines.push('<form class="space-y-4 p-4">');
@@ -392,7 +402,7 @@ const App: React.FC = () => {
           };
           const styleStr = getStyleString(el.styles);
 
-          if (el.type === 'container') {
+          if (el.type === 'container' || el.type === 'bootstrap-row' || el.type === 'bootstrap-col') {
               lines.push(`  <div class="container-element" ${styleStr}>`);
               if (el.children) lines.push(generateHTML(el.children));
               lines.push('  </div>');
@@ -409,7 +419,7 @@ const App: React.FC = () => {
               return;
           }
 
-          if (!['button', 'reset-button', 'news-card', 'iframe', 'navbar', 'container', 'html-block', 'htmlContent', 'typography', 'divider', 'image', 'accordion'].includes(el.type)) {
+          if (!['button', 'reset-button', 'news-card', 'iframe', 'navbar', 'container', 'html-block', 'htmlContent', 'typography', 'divider', 'image', 'accordion', 'bootstrap-row', 'bootstrap-col'].includes(el.type)) {
               lines.push(`  <div class="form-group mb-4" ${styleStr}>`);
               lines.push(`    <label for="${el.name}" class="block text-sm font-medium text-gray-700">${el.label}${el.required ? ' *' : ''}</label>`);
           } else {
@@ -453,76 +463,83 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen font-sans text-brand-text overflow-hidden">
+    <div className="flex flex-col h-screen font-sans text-brand-text overflow-hidden bg-gray-50">
       {/* Header - Fixed Height */}
-      <header className="flex-none flex justify-between items-center p-3 bg-brand-primary text-white shadow-md z-30">
-        <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold">Power Form Builder AI</h1>
-            <div className="flex space-x-1 bg-brand-accent rounded-md p-1">
-                <button onClick={handleUndo} disabled={historyIndex === 0} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Undo"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg></button>
-                <button onClick={handleRedo} disabled={historyIndex === history.length - 1} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Redo"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
+      <header className="flex-none flex justify-between items-center px-4 py-2 bg-brand-primary text-white shadow-md z-30">
+        <div className="flex items-center space-x-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+            <h1 className="text-lg font-bold tracking-tight">PowerForm Builder <span className="text-xs opacity-75 font-normal ml-1 bg-white/20 px-1.5 py-0.5 rounded">AI</span></h1>
+            <div className="flex space-x-1 ml-4 bg-black/20 rounded p-0.5">
+                <button onClick={handleUndo} disabled={historyIndex === 0} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Undo"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" /></svg></button>
+                <button onClick={handleRedo} disabled={historyIndex === history.length - 1} className="p-1 hover:bg-white/10 rounded disabled:opacity-30" title="Redo"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg></button>
             </div>
         </div>
         <div className="flex items-center space-x-2">
+           <button
+                onClick={() => setIsAiAssistantOpen(!isAiAssistantOpen)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded shadow-sm transition-colors flex items-center border border-transparent ${isAiAssistantOpen ? 'bg-white text-brand-primary' : 'bg-brand-accent text-white hover:bg-white/20'}`}
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                {isAiAssistantOpen ? 'Close AI' : 'AI Assistant'}
+           </button>
            {selectedIds.length > 0 && (
-               <div className="flex space-x-1 bg-white/10 p-1 rounded-md animate-pulse shadow-inner">
-                 <button onClick={handleGroupElements} className="px-3 py-1.5 bg-indigo-500 text-white text-xs font-bold rounded shadow-sm hover:bg-indigo-600 transition-colors flex items-center">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+               <div className="flex space-x-1 mr-2 border-l border-white/20 pl-2">
+                 <button onClick={handleGroupElements} className="px-3 py-1.5 bg-indigo-500/90 text-white text-xs font-semibold rounded shadow-sm hover:bg-indigo-600 transition-colors flex items-center">
                      Group
                  </button>
-                 <button onClick={handleSaveAsTemplate} className="px-3 py-1.5 bg-yellow-600 text-white text-xs font-bold rounded shadow-sm hover:bg-yellow-700 transition-colors flex items-center">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+                 <button onClick={handleSaveAsTemplate} className="px-3 py-1.5 bg-yellow-600/90 text-white text-xs font-semibold rounded shadow-sm hover:bg-yellow-700 transition-colors flex items-center">
                      Template
                  </button>
                </div>
            )}
-           <button onClick={handleSaveDraft} className="px-4 py-2 bg-green-600 text-white font-semibold rounded-md shadow-sm hover:bg-green-700 transition-colors flex items-center">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
-               {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save Draft'}
+           <button onClick={handleSaveDraft} className="px-3 py-1.5 bg-white/10 text-white text-sm font-medium rounded hover:bg-white/20 transition-colors border border-transparent hover:border-white/30 flex items-center">
+               {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save'}
            </button>
-           <button onClick={() => setShowImportModal(true)} className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 flex items-center transition-colors">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-             Import
-           </button>
-           <button onClick={() => setShowPreviewModal(true)} disabled={formElements.length === 0} className="px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
+           <button onClick={() => setShowPreviewModal(true)} disabled={formElements.length === 0} className="px-3 py-1.5 bg-green-600 text-white text-sm font-semibold rounded shadow-sm hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center">
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" /></svg>
              Preview
            </button>
-           <button onClick={() => { setGeneratedPrompt(generatePrompt(formElements)); setShowPromptModal(true); }} disabled={formElements.length === 0} className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-md shadow-sm hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
-               AI Prompt
-           </button>
-           <button onClick={() => setShowClearConfirm(true)} disabled={formElements.length === 0} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-md shadow-sm hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">Clear</button>
-           <button onClick={() => { setGeneratedCode(generateHTML(formElements)); setShowCodeModal(true); }} disabled={formElements.length === 0} className="px-4 py-2 bg-white text-brand-primary font-semibold rounded-md shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">Code</button>
+           <button onClick={() => { setGeneratedCode(generateHTML(formElements)); setShowCodeModal(true); }} disabled={formElements.length === 0} className="px-3 py-1.5 bg-white text-brand-primary text-sm font-semibold rounded shadow-sm hover:bg-gray-100 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors">Export Code</button>
         </div>
       </header>
 
-      {/* AI Bar - Fixed Height */}
-       <div className="flex-none p-3 bg-brand-secondary border-b border-gray-300 z-20">
-            <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center sm:space-x-2">
-                <input type="text" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Describe your form, e.g., 'A user registration form...'" className="flex-grow p-2 w-full border border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary" disabled={isLoading} />
-                <button onClick={handleGetSuggestions} disabled={isLoading || !aiPrompt.trim()} className="mt-2 sm:mt-0 px-4 py-2 bg-brand-accent text-white font-semibold rounded-md shadow-sm hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">{isLoading ? 'Thinking...' : 'AI Suggest'}</button>
-                <div className="flex items-center space-x-2 mt-2 sm:mt-0 px-4">
-                  <input 
-                    type="checkbox" 
-                    id="search-toggle" 
-                    checked={useGoogleSearch} 
-                    onChange={(e) => setUseGoogleSearch(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary cursor-pointer"
-                  />
-                  <label htmlFor="search-toggle" className="text-xs font-bold text-brand-text uppercase tracking-tight cursor-pointer select-none">Web Search</label>
+      {/* AI Bar - Collapsible */}
+       {isAiAssistantOpen && (
+           <div className="flex-none p-4 bg-gray-50 border-b border-gray-200 z-20 shadow-inner animate-fade-in-staggered">
+                <div className="max-w-4xl mx-auto flex flex-col space-y-2">
+                    <div className="flex items-center space-x-2">
+                        <div className="relative flex-grow">
+                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg className="h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
+                             </div>
+                            <input type="text" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="Describe a form to build (e.g., 'Customer feedback survey with rating and comments')" className="block w-full pl-10 p-3 sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm" disabled={isLoading} />
+                        </div>
+                        <button onClick={handleGetSuggestions} disabled={isLoading || !aiPrompt.trim()} className="px-6 py-3 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow hover:bg-indigo-700 disabled:bg-gray-300 transition-all transform active:scale-95 flex items-center">
+                            {isLoading ? <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : "Generate Form"}
+                        </button>
+                    </div>
+                    <div className="flex items-center space-x-2 pl-2">
+                        <input 
+                            type="checkbox" 
+                            id="search-toggle" 
+                            checked={useGoogleSearch} 
+                            onChange={(e) => setUseGoogleSearch(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <label htmlFor="search-toggle" className="text-xs font-medium text-gray-600 cursor-pointer select-none">Use Google Search for latest trends & templates</label>
+                    </div>
                 </div>
             </div>
-        </div>
+       )}
         {error && (
-            <div className="bg-red-50 p-3 text-center text-red-700 text-sm font-medium border-b border-red-200">
+            <div className="bg-red-50 p-2 text-center text-red-700 text-xs font-medium border-b border-red-200">
                 {error}
             </div>
         )}
 
       {/* Main Content Area - Flex Grow */}
       <main className="flex flex-grow overflow-hidden relative">
-        <div className="h-full overflow-y-auto border-r border-gray-300 z-10 flex-shrink-0">
+        <div className="h-full z-10 flex-shrink-0 shadow-sm relative">
             <Palette 
                 suggestedElements={suggestedElements} 
                 onClearSuggestions={() => setSuggestedElements([])} 
@@ -530,7 +547,7 @@ const App: React.FC = () => {
             />
         </div>
         
-        <div className="flex-grow h-full overflow-y-auto bg-gray-100 relative">
+        <div className="flex-grow h-full relative">
             <Canvas 
               elements={formElements} 
               setElements={updateFormElementsWithHistory} 
@@ -538,9 +555,18 @@ const App: React.FC = () => {
               selectedIds={selectedIds}
               updateElement={updateElement}
             />
+            {/* Floating Action Buttons */}
+            <div className="absolute bottom-6 right-8 flex flex-col space-y-3 z-20">
+                 <button onClick={() => setShowClearConfirm(true)} disabled={formElements.length === 0} className="p-3 bg-white text-red-500 rounded-full shadow-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-0 transition-all transform hover:scale-105 border border-gray-100" title="Clear All">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                 </button>
+                 <button onClick={() => setShowImportModal(true)} className="p-3 bg-brand-primary text-white rounded-full shadow-lg hover:bg-brand-accent transition-all transform hover:scale-105" title="Import Data">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                 </button>
+            </div>
         </div>
 
-        <div className="h-full overflow-y-auto border-l border-gray-300 z-10 flex-shrink-0 bg-white">
+        <div className="h-full overflow-y-auto border-l border-gray-200 z-10 flex-shrink-0 bg-white shadow-sm">
             <PropertiesPanel 
                 selectedElement={selectedElement} 
                 selectedIds={selectedIds}
