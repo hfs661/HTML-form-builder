@@ -241,9 +241,9 @@ export const WEBSITE_SNIPPETS: SnippetItem[] = [
     }
 ];
 
-export const LAYOUT_SNIPPETS: SnippetItem[] = [
+export const BOOTSTRAP_GRID_SNIPPETS: SnippetItem[] = [
     {
-        label: 'Bootstrap Grid (2 Cols)',
+        label: '2 Columns',
         icon: (
              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm8 1H4v8h6V6zm2 0v8h6V6h-6z" />
@@ -259,8 +259,8 @@ export const LAYOUT_SNIPPETS: SnippetItem[] = [
         }]
     },
     {
-        label: 'Bootstrap Grid (3 Cols)',
-         icon: (
+        label: '3 Columns',
+        icon: (
              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm5 1H4v8h3V6zm1 0v8h4V6H8zm5 0v8h3V6h-3z" />
              </svg>
@@ -276,7 +276,7 @@ export const LAYOUT_SNIPPETS: SnippetItem[] = [
         }]
     },
     {
-        label: 'Bootstrap Grid (12 Cols)',
+        label: '12 Columns',
          icon: (
              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm2 2v2h2V5H5zm4 0v2h2V5H9zm4 0v2h2V5h-2zM5 9v2h2V9H5zm4 0v2h2V9H9zm4 0v2h2V9h-2zM5 13v2h2v-2H5zm4 0v2h2v-2H9zm4 0v2h2v-2h-2z" clipRule="evenodd" />
@@ -291,7 +291,10 @@ export const LAYOUT_SNIPPETS: SnippetItem[] = [
                 styles: { padding: '4px', minHeight: '40px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1', fontSize: '10px', textAlign: 'center' }
             }))
         }]
-    },
+    }
+];
+
+export const LAYOUT_SNIPPETS: SnippetItem[] = [
     {
         label: 'Sidebar Left',
          icon: (

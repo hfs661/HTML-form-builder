@@ -177,14 +177,47 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     }));
   };
 
-  const handleDragOverElement = (e: React.DragEvent<HTMLDivElement>, parentId: string | null, index: number, elementId: string, layoutDirection: 'row' | 'column') => {
+  const handleDragOverElement = (e: React.DragEvent<HTMLDivElement>, parentId: string | null, index: number, element: FormElement, layoutDirection: 'row' | 'column') => {
     e.preventDefault(); 
     e.stopPropagation(); 
     setIsDragging(true);
 
     const rect = e.currentTarget.getBoundingClientRect();
     
-    // Determine position based on layout direction of the parent
+    // Improved Nesting Logic for Containers/Columns
+    const isContainer = ['container', 'bootstrap-col', 'accordion', 'bootstrap-row'].includes(element.type);
+    
+    if (isContainer) {
+        // If empty, always inside
+        if (!element.children || element.children.length === 0) {
+             setDragOverTarget({ parentId: element.id, index: 0, position: 'inside' });
+             return;
+        }
+
+        // If populated, determine if we are hovering the "edge" (reorder) or "center" (nest)
+        // This is important for dropping *into* a column vs *moving* the column
+        const isRow = layoutDirection === 'row';
+        const reorderZoneSize = 15; // px from edge to trigger reorder
+        
+        let isInReorderZone = false;
+        if (isRow) {
+            isInReorderZone = (e.clientX < rect.left + reorderZoneSize) || (e.clientX > rect.right - reorderZoneSize);
+        } else {
+            isInReorderZone = (e.clientY < rect.top + reorderZoneSize) || (e.clientY > rect.bottom - reorderZoneSize);
+        }
+
+        if (!isInReorderZone) {
+            // Hovering center area -> Nest inside at the end
+            setDragOverTarget({ 
+                parentId: element.id, 
+                index: element.children.length, 
+                position: 'inside' 
+            });
+            return;
+        }
+    }
+
+    // Standard Reorder Logic
     let isAfter = false;
     if (layoutDirection === 'row') {
         const midX = rect.left + rect.width / 2;
@@ -259,6 +292,10 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
 
                 const showDropBefore = dragOverTarget?.parentId === parentId && dragOverTarget?.index === index && dragOverTarget?.position === 'before';
                 const showDropAfter = dragOverTarget?.parentId === parentId && dragOverTarget?.index === index + 1 && dragOverTarget?.position === 'after';
+                const showDropInside = dragOverTarget?.parentId === element.id && dragOverTarget?.position === 'inside';
+
+                // Bootstrap row logic: Remove gap in Canvas to align with renderer negative margins
+                const flexGapClass = (element.type === 'bootstrap-row') ? '' : 'gap-2';
 
                 return (
                   <div key={element.id} style={wrapperStyle} className={`relative transition-all duration-200 ${layoutDirection === 'column' ? 'last:mb-0' : ''}`}>
@@ -276,7 +313,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                         onClick={(e) => { e.stopPropagation(); handleSelect(element.id, e.ctrlKey || e.metaKey || e.shiftKey); }}
                         onDoubleClick={(e) => { e.stopPropagation(); handleSelect(element.id, false); setEditingElementId(element.id); }}
                         onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify(element)); setIsDragging(true); }}
-                        onDragOver={(e) => handleDragOverElement(e, parentId, index, element.id, layoutDirection)}
+                        onDragOver={(e) => handleDragOverElement(e, parentId, index, element, layoutDirection)}
                         onDrop={(e) => handleDrop(e, parentId, dragOverTarget?.index ?? index)}
                         onKeyDown={(e) => handleKeyDown(e, element.id)}
                         tabIndex={0}
@@ -284,16 +321,19 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                         aria-label={`Select ${element.label}`}
                         className={`group relative p-1 rounded transition-all duration-150 outline-none
                             ${isSelected ? 'ring-2 ring-brand-primary ring-offset-2 z-10' : 'hover:ring-1 hover:ring-gray-300'} 
+                            ${showDropInside ? 'ring-2 ring-brand-primary bg-blue-50/50' : ''}
                             ${dragOverTarget?.parentId === parentId && (dragOverTarget?.index === index || dragOverTarget?.index === index + 1) ? 'opacity-80' : ''}`}
                      >
                         <FormElementRenderer element={element} isEditing={editingElementId === element.id} onStartEditing={setEditingElementId} onStopEditing={() => setEditingElementId(null)} onUpdate={updateElement}>
                             {['container', 'accordion', 'bootstrap-row', 'bootstrap-col'].includes(element.type) && (
-                                <div className={`min-h-[40px] pt-2 flex ${childLayoutDirection === 'row' ? 'flex-row flex-wrap gap-2' : 'flex-col'} h-full w-full`}>
+                                <div className={`min-h-[40px] pt-2 flex ${childLayoutDirection === 'row' ? `flex-row flex-wrap ${flexGapClass}` : 'flex-col'} h-full w-full`}>
                                     <RecursiveList items={element.children || []} parentId={element.id} layoutDirection={childLayoutDirection} />
                                     <div 
-                                        className={`flex-grow min-h-[30px] border border-dashed rounded flex items-center justify-center text-xs font-medium transition-colors mt-2 mx-1 cursor-pointer
-                                            ${dragOverTarget?.parentId === element.id && dragOverTarget?.position === 'inside' ? 'border-brand-primary bg-blue-50 text-brand-primary' : 'border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400 hover:bg-gray-50'}
-                                            ${childLayoutDirection === 'row' ? 'min-w-[50px] w-auto' : 'w-full'}`} 
+                                        className={`flex-grow border border-dashed rounded flex items-center justify-center text-xs font-medium transition-colors mt-2 mx-1 cursor-pointer
+                                            ${dragOverTarget?.parentId === element.id && dragOverTarget?.position === 'inside' ? 'border-brand-primary bg-blue-100 text-brand-primary' : 'border-gray-200 text-gray-300 hover:border-gray-300 hover:text-gray-400 hover:bg-gray-50'}
+                                            ${childLayoutDirection === 'row' ? 'min-w-[50px] w-auto' : 'w-full'}
+                                            ${(!element.children || element.children.length === 0) ? 'min-h-[60px] h-full' : 'min-h-[30px]'}
+                                            `} 
                                         onDragOver={(e) => handleDragOverContainer(e, element.id, element.children?.length || 0)} 
                                         onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}
                                         onClick={(e) => {
@@ -301,15 +341,19 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                                             // Select parent to indicate intent to add to it
                                             handleSelect(element.id);
                                         }}
-                                        title="Drop here or select to add via sidebar"
+                                        title="Drop here or click to select this column"
                                     >
-                                        {element.children && element.children.length === 0 ? "+" : (isDragging ? "+" : "")}
+                                        <div className={`transform transition-transform ${isDragging || (!element.children || element.children.length === 0) ? 'scale-100' : 'scale-0'}`}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
                                     </div>
                                 </div>
                             )}
                         </FormElementRenderer>
                         
-                        {isSelected && selectedIds.length === 1 && (
+                        {isSelected && selectedIds.length === 1 && element.type !== 'bootstrap-col' && (
                             <div 
                                 className="absolute bottom-0 right-0 w-3 h-3 bg-brand-primary cursor-se-resize rounded-tl-sm z-30 flex items-center justify-center hover:w-4 hover:h-4 transition-all" 
                                 onMouseDown={(e) => handleResizeStart(e, element)}

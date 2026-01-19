@@ -21,6 +21,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
   const [file, setFile] = useState<File | null>(null);
   const [pasteContent, setPasteContent] = useState('');
   const [columns, setColumns] = useState<ColumnPreview[]>([]);
+  const [importType, setImportType] = useState<'structured' | 'unstructured'>('structured');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +58,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
     setError(null);
     setIsProcessing(true);
     setColumns([]);
+    setImportType('structured');
 
     const ext = uploadedFile.name.split('.').pop()?.toLowerCase();
 
@@ -117,9 +119,11 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
       if (!pasteContent.trim()) return;
       setIsProcessing(true);
       setError(null);
+      setImportType('structured');
       
       try {
-          // Try parse as JSON
+          // 1. Try JSON
+          let isJson = false;
           try {
               const json = JSON.parse(pasteContent);
               if (Array.isArray(json) && json.length > 0) {
@@ -129,36 +133,54 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
                       sample: String(json[0][k] || '')
                   }));
                   setColumns(cols);
+                  isJson = true;
                   setIsProcessing(false);
                   return;
               }
           } catch(e) {
-              // Not JSON, ignore
+              // Not JSON
           }
           
-          // Try parse as CSV (tab or comma)
-          const results = Papa.parse(pasteContent, { header: true, preview: 1 });
-          if (results.meta.fields && results.meta.fields.length > 0) {
-                const cols = results.meta.fields.map(field => ({
-                    header: field,
-                    sample: String((results.data[0] as any)[field] || '')
-                }));
-                setColumns(cols);
-          } else {
-               setError("Could not detect structure from pasted text. Try using CSV format or JSON array.");
+          if (!isJson) {
+              // 2. Try CSV (basic check)
+              const results = Papa.parse(pasteContent, { header: true, preview: 1 });
+              // Check if we actually got multiple columns or plausible structure
+              if (results.meta.fields && results.meta.fields.length > 1) {
+                    const cols = results.meta.fields.map(field => ({
+                        header: field,
+                        sample: String((results.data[0] as any)[field] || '')
+                    }));
+                    setColumns(cols);
+                    setIsProcessing(false);
+                    return;
+              }
           }
+
+          // 3. Fallback: Treat as Raw Text / Code
+          setImportType('unstructured');
+          setColumns([]); // No specific columns for unstructured
+          setIsProcessing(false);
+
       } catch (e: any) {
-          setError("Error parsing text: " + e.message);
-      } finally {
+          // If all parsing fails drastically, fallback to raw
+          setImportType('unstructured');
+          setColumns([]);
           setIsProcessing(false);
       }
   };
 
   const handleGenerate = async () => {
-      if (columns.length === 0) return;
+      if ((columns.length === 0 && importType === 'structured') || isGenerating) return;
+      if (activeTab === 'paste' && !pasteContent.trim()) return;
+
       setIsGenerating(true);
       
-      const summary = columns.map(c => `- Column: "${c.header}", Sample Value: "${c.sample}"`).join('\n');
+      let summary = '';
+      if (importType === 'structured') {
+          summary = columns.map(c => `- Column: "${c.header}", Sample Value: "${c.sample}"`).join('\n');
+      } else {
+          summary = pasteContent;
+      }
       
       try {
           const suggestions = await getFormSuggestionsFromData(summary);
@@ -190,7 +212,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-xl font-bold text-brand-text">Import Data</h2>
+          <h2 className="text-xl font-bold text-brand-text">Import Data / Code</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -200,16 +222,16 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
         
         <div className="flex border-b border-gray-200">
              <button 
-                onClick={() => setActiveTab('file')}
+                onClick={() => { setActiveTab('file'); setImportType('structured'); setColumns([]); setError(null); }}
                 className={`flex-1 py-3 text-sm font-medium ${activeTab === 'file' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-gray-500 hover:text-gray-700'}`}
              >
                  Upload File (CSV/Excel)
              </button>
              <button 
-                onClick={() => setActiveTab('paste')}
+                onClick={() => { setActiveTab('paste'); setColumns([]); setError(null); }}
                 className={`flex-1 py-3 text-sm font-medium ${activeTab === 'paste' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-gray-500 hover:text-gray-700'}`}
              >
-                 Paste Text/JSON
+                 Paste Text/JSON/HTML
              </button>
         </div>
 
@@ -240,7 +262,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
                 <div className="space-y-3">
                     <textarea 
                         className="w-full h-48 border border-gray-300 rounded-md p-3 text-sm font-mono focus:ring-brand-primary focus:border-brand-primary"
-                        placeholder="Paste CSV data or JSON array here..."
+                        placeholder="Paste CSV data, JSON array, HTML code, or plain text description here..."
                         value={pasteContent}
                         onChange={(e) => setPasteContent(e.target.value)}
                     ></textarea>
@@ -249,37 +271,50 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
                         disabled={!pasteContent.trim() || isProcessing}
                         className="px-4 py-2 bg-gray-100 border border-gray-300 rounded text-sm font-medium hover:bg-gray-200"
                     >
-                        Process Text
+                        Process Content
                     </button>
                 </div>
             )}
             
-            {isProcessing && <p className="text-center text-gray-500 mt-4 animate-pulse">Analyzing data structure...</p>}
+            {isProcessing && <p className="text-center text-gray-500 mt-4 animate-pulse">Analyzing structure...</p>}
             {error && <p className="text-center text-red-500 mt-4 text-sm">{error}</p>}
 
-            {columns.length > 0 && (
+            {(columns.length > 0 || (activeTab === 'paste' && importType === 'unstructured' && !isProcessing && !error && pasteContent)) && (
                 <div className="mt-6">
-                    <h3 className="font-bold text-gray-700 mb-2">Detected Columns</h3>
-                    <div className="border border-gray-200 rounded-md overflow-hidden bg-gray-50">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-100">
-                                <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Header</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sample Value</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {columns.map((col, i) => (
-                                    <tr key={i}>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{col.header}</td>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{col.sample}</td>
+                    <h3 className="font-bold text-gray-700 mb-2">
+                        {columns.length > 0 ? "Detected Structure" : "Detected Content"}
+                    </h3>
+                    
+                    {columns.length > 0 ? (
+                        <div className="border border-gray-200 rounded-md overflow-hidden bg-gray-50">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Header</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sample Value</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {columns.map((col, i) => (
+                                        <tr key={i}>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{col.header}</td>
+                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{col.sample}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="border border-gray-200 rounded-md p-4 bg-gray-50 text-xs font-mono text-gray-600 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                            <span className="block mb-2 font-bold text-indigo-600 uppercase tracking-wider text-[10px]">Raw Content Preview</span>
+                            {pasteContent.substring(0, 500) + (pasteContent.length > 500 ? '...' : '')}
+                        </div>
+                    )}
+                    
                     <p className="text-xs text-gray-500 mt-2">
-                        Gemini AI will analyze these columns to suggest appropriate form fields (Types, Labels, Options).
+                        {columns.length > 0 
+                            ? "Gemini AI will analyze these columns to suggest appropriate form fields." 
+                            : "Gemini AI will analyze this text/code to generate a matching form structure."}
                     </p>
                 </div>
             )}
@@ -289,7 +324,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) => {
              <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100">Cancel</button>
              <button 
                 onClick={handleGenerate} 
-                disabled={columns.length === 0 || isGenerating}
+                disabled={((columns.length === 0 && importType === 'structured') || isGenerating)}
                 className="px-4 py-2 bg-brand-primary text-white font-semibold rounded-md shadow-sm hover:bg-brand-accent disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center"
             >
                 {isGenerating ? (

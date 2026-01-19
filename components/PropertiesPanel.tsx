@@ -356,6 +356,24 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                  <PropertyInput label="Variable Name" name="name" value={selectedElement.name} onChange={(e) => updateElement(selectedElement.id, { name: e.target.value })} />
                  <PropertyInput label="Accessibility Label (ARIA)" name="ariaLabel" value={selectedElement.ariaLabel} onChange={(e) => updateElement(selectedElement.id, { ariaLabel: e.target.value })} placeholder="Screen reader text" />
                  
+                 {['container', 'bootstrap-row', 'bootstrap-col'].includes(selectedElement.type) && (
+                     <PropertySelect 
+                        label="Semantic HTML Tag" 
+                        name="htmlTag" 
+                        value={selectedElement.htmlTag || 'div'} 
+                        onChange={(e) => updateElement(selectedElement.id, { htmlTag: e.target.value })} 
+                        options={[
+                            {value:'div',label:'Generic (div)'}, 
+                            {value:'section',label:'Section'}, 
+                            {value:'article',label:'Article'}, 
+                            {value:'header',label:'Header'}, 
+                            {value:'footer',label:'Footer'}, 
+                            {value:'aside',label:'Aside'}, 
+                            {value:'main',label:'Main'}
+                        ]} 
+                    />
+                 )}
+
                  {isInputType && (
                      <>
                         <PropertyInput label="Placeholder" name="placeholder" value={selectedElement.placeholder} onChange={(e) => updateElement(selectedElement.id, { placeholder: e.target.value })} />
@@ -383,7 +401,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                     />
                  )}
              </CollapsibleSection>
-
+             
              {selectedElement.type === 'code-block' && (
                  <CollapsibleSection title="Code Settings" defaultOpen>
                     <PropertySelect 
@@ -545,7 +563,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
           <div className="space-y-4">
               <CollapsibleSection title="Visibility Logic (Show/Hide)" defaultOpen>
                   <p className="text-xs text-gray-500 mb-3">Show this element when:</p>
-                  <PropertySelect label="Trigger Input" name="triggerId" value={visibilityLogic.triggerId} onChange={(e) => updateElement(selectedElement.id, { logic: { ...visibilityLogic, triggerId: e.target.value } })} options={[{value:'',label:'-- Always Visible --'}, ...allElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
+                  <PropertySelect label="Trigger Input" name="triggerId" value={visibilityLogic.triggerId} onChange={(e) => updateElement(selectedElement.id, { logic: { ...visibilityLogic, triggerId: e.target.value } })} options={[{value:'',label:'-- Always Visible --'}, ...allFlatElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
                   {visibilityLogic.triggerId && (
                       <>
                         <PropertySelect 
@@ -610,14 +628,12 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                               rows={5}
                               fontFamily="monospace"
                           />
-                          {selectedElement.type === 'button' && (
-                              <button 
-                                onClick={() => updateElement(selectedElement.id, { onClickScript: "console.log('Button " + selectedElement.label + " clicked!');" })}
-                                className="text-xs text-brand-primary underline hover:text-brand-accent mb-2"
-                              >
-                                  + Add 'Log to Console' Script
-                              </button>
-                          )}
+                          <button 
+                            onClick={() => updateElement(selectedElement.id, { onClickScript: `console.log('Element "${selectedElement.label || selectedElement.name}" clicked! (id: ${selectedElement.id})');` })}
+                            className="text-xs text-brand-primary underline hover:text-brand-accent mb-2"
+                          >
+                              + Add 'Log to Console' Script
+                          </button>
                       </div>
                   ) : (
                       <div>
@@ -734,28 +750,57 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                 {dataLogic.rules.map((rule, idx) => (
                     <div key={idx} className="p-3 bg-gray-50 border border-gray-200 rounded-md mb-3 relative shadow-sm">
                         <button onClick={() => removeDataLogicRule(idx)} className="absolute top-1 right-1 text-red-500 font-bold hover:scale-110 transition-transform">×</button>
-                        <PropertySelect label="If field..." name="triggerId" value={rule.triggerId} onChange={(e) => updateDataLogicRule(idx, { triggerId: e.target.value })} options={[{value:'',label:'-- Select Source --'}, ...allElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
-                        <PropertySelect 
-                            label="Condition" 
-                            name="condition" 
-                            value={rule.condition} 
-                            onChange={(e) => updateDataLogicRule(idx, { condition: e.target.value as any })} 
-                            options={logicConditions} 
-                        />
-                        <PropertyInput label="Match Value" name="value" value={rule.value} onChange={(e) => updateDataLogicRule(idx, { value: e.target.value })} />
-                        <div className="border-t border-gray-200 my-2 pt-2">
-                             <PropertySelect label="Then set..." name="targetProperty" value={rule.targetProperty} onChange={(e) => updateDataLogicRule(idx, { targetProperty: e.target.value as any })} options={[
-                                 {value:'value',label:'Set Field Value'},
-                                 {value:'disabled',label:'Set Disabled State'},
-                                 {value:'required',label:'Set Required State'},
-                                 {value:'label',label:'Set Label Text'},
-                                 {value:'options',label:'Set Options (comma separated)'}
-                             ]} />
-                             <PropertyInput label="Resulting Value" name="result" value={rule.result} onChange={(e) => updateDataLogicRule(idx, { result: e.target.value })} />
+                        <PropertySelect label="If field..." name="triggerId" value={rule.triggerId} onChange={(e) => updateDataLogicRule(idx, { triggerId: e.target.value })} options={[{value:'',label:'-- Select Source --'}, ...allFlatElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} />
+                        <div className="grid grid-cols-2 gap-2">
+                             <PropertySelect label="Condition" name="condition" value={rule.condition} onChange={(e) => updateDataLogicRule(idx, { condition: e.target.value as any })} options={logicConditions} />
+                             <PropertyInput label="Match Value" name="value" value={rule.value} onChange={(e) => updateDataLogicRule(idx, { value: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                             <PropertySelect 
+                                label="Target Prop" 
+                                name="targetProperty" 
+                                value={rule.targetProperty} 
+                                onChange={(e) => updateDataLogicRule(idx, { targetProperty: e.target.value as any })} 
+                                options={[
+                                    {value:'value',label:'Value'},
+                                    {value:'disabled',label:'Disabled'},
+                                    {value:'required',label:'Required'},
+                                    {value:'label',label:'Label'},
+                                    {value:'hidden',label:'Hidden'},
+                                    {value:'options',label:'Options (comma sep)'}
+                                ]} 
+                             />
+                             <PropertyInput label="Result" name="result" value={rule.result} onChange={(e) => updateDataLogicRule(idx, { result: e.target.value })} />
                         </div>
                     </div>
                 ))}
-                <button onClick={handleAddDataLogicRule} className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded text-xs font-bold uppercase hover:border-brand-primary hover:text-brand-primary transition-colors focus:outline-none focus:ring-2 focus:ring-brand-primary">+ Add Data Logic Rule</button>
+                <button onClick={handleAddDataLogicRule} className="w-full py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded text-xs font-bold uppercase hover:bg-gray-200 transition-colors">+ Add Legacy Rule</button>
+              </CollapsibleSection>
+
+              <CollapsibleSection title="Validation Logic">
+                  <PropertySelect 
+                    label="Condition" 
+                    name="condition" 
+                    value={validationLogic.condition} 
+                    onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, condition: e.target.value as any } })} 
+                    options={[
+                        {value:'matches',label:'Matches Field'},
+                        {value:'regex',label:'Regex Pattern'},
+                        {value:'prohibited',label:'Prohibited Value'}
+                    ]} 
+                  />
+                  {validationLogic.condition === 'regex' ? (
+                       <PropertyInput label="Regex Pattern" name="value" value={validationLogic.value} onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, value: e.target.value } })} placeholder="e.g. ^[0-9]+$" />
+                  ) : validationLogic.condition !== 'prohibited' && (
+                       <PropertySelect 
+                            label="Target Field" 
+                            name="triggerId" 
+                            value={validationLogic.triggerId} 
+                            onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, triggerId: e.target.value } })} 
+                            options={[{value:'',label:'-- Select Target --'}, ...allFlatElements.filter(e => e.id !== selectedElement.id).map(e => ({value:e.id,label:e.label || e.name}))]} 
+                       />
+                  )}
+                  <PropertyInput label="Error Message" name="errorMessage" value={validationLogic.errorMessage} onChange={(e) => updateElement(selectedElement.id, { validationLogic: { ...validationLogic, errorMessage: e.target.value } })} />
               </CollapsibleSection>
           </div>
         )}

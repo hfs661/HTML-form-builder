@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import type { PaletteItem, FormElement, SnippetItem } from '../types';
-import { STANDARD_ELEMENTS, SNIPPETS, SCRIPT_SNIPPETS, STYLE_SNIPPETS, LAYOUT_SNIPPETS, WEBSITE_SNIPPETS } from '../constants';
+import { STANDARD_ELEMENTS, SNIPPETS, SCRIPT_SNIPPETS, STYLE_SNIPPETS, LAYOUT_SNIPPETS, BOOTSTRAP_GRID_SNIPPETS, WEBSITE_SNIPPETS } from '../constants';
 
 interface PaletteProps {
   suggestedElements: Partial<FormElement>[];
@@ -149,16 +149,23 @@ const Palette: React.FC<PaletteProps> = ({ suggestedElements, onClearSuggestions
         </div>
 
         <div className="mb-4">
-            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Website Sections</h3>
-            {WEBSITE_SNIPPETS.filter(s => matchesSearch(s.label)).map((snippet, idx) => (
-                <DraggableItem key={`website-snippet-${idx}`} item={snippet} type="snippet" onAdd={onAddElement} />
+            <h3 className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-2">Bootstrap Grid System</h3>
+             {BOOTSTRAP_GRID_SNIPPETS.filter(s => matchesSearch(s.label)).map((snippet, idx) => (
+                <DraggableItem key={`bs-grid-${idx}`} item={snippet} type="snippet" onAdd={onAddElement} />
             ))}
         </div>
 
         <div className="mb-4">
-            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Column Layouts</h3>
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Layout Templates</h3>
             {LAYOUT_SNIPPETS.filter(s => matchesSearch(s.label)).map((snippet, idx) => (
                 <DraggableItem key={`layout-${idx}`} item={snippet} type="snippet" onAdd={onAddElement} />
+            ))}
+        </div>
+
+        <div className="mb-4">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Website Sections</h3>
+            {WEBSITE_SNIPPETS.filter(s => matchesSearch(s.label)).map((snippet, idx) => (
+                <DraggableItem key={`website-snippet-${idx}`} item={snippet} type="snippet" onAdd={onAddElement} />
             ))}
         </div>
         

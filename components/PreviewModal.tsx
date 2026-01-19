@@ -63,7 +63,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                     if (triggerEl) {
                         const val = formData[triggerEl.name];
                         const matches = evaluateCondition(el.logic.condition, val, el.logic.value);
-                        // If action is show: visible if matches. If action is hide: visible if NOT matches.
+                        // If action is show: visible if matches. If action is hide: visible if matches NOT.
+                        // Wait, previous logic was: action 'show' means visible if match. action 'hide' means visible if NO match.
                         isVisible = el.logic.action === 'show' ? matches : !matches;
                     }
                 }
@@ -230,7 +231,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                     {el.children && renderElements(el.children)}
                 </FormElementRenderer>
                 {errors[el.name] && (
-                    <p className="text-red-500 text-[10px] mt-0.5 font-bold animate-pulse px-1">
+                    <p id={`${el.name}-error`} role="alert" className="text-red-500 text-[10px] mt-0.5 font-bold animate-pulse px-1">
                         {errors[el.name]}
                     </p>
                 )}

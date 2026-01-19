@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Palette from './components/Palette';
 import Canvas from './components/Canvas';
@@ -62,7 +61,6 @@ const App: React.FC = () => {
     }
   });
   
-  // History for Undo/Redo
   const [history, setHistory] = useState<FormElement[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
@@ -73,7 +71,7 @@ const App: React.FC = () => {
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatedPrompt, setGeneratedPrompt] = useState('');
-  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false); // Default minimized
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [suggestedElements, setSuggestedElements] = useState<Partial<FormElement>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +81,6 @@ const App: React.FC = () => {
   const [searchSources, setSearchSources] = useState<any[] | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  // Initialize history
   useEffect(() => {
       if (history.length === 1 && history[0].length === 0 && formElements.length > 0) {
           setHistory([formElements]);
@@ -160,6 +157,23 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAnalyzeForm = async () => {
+      if (formElements.length === 0) return;
+      setIsLoading(true);
+      setError(null);
+      try {
+          const suggestions = await analyzeFormContext(formElements);
+          setSuggestedElements(suggestions);
+          setIsAiAssistantOpen(true);
+          alert("AI analyzed your form and added some improvement suggestions to the 'AI Generated' list!");
+      } catch (err: any) {
+          setError(err.message || "An error occurred while analyzing the form.");
+          console.error(err);
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
   const recursiveUpdateElement = (list: FormElement[], id: string, updatedProps: Partial<FormElement>): FormElement[] => {
       return list.map(el => {
           if (el.id === id) {
@@ -213,14 +227,11 @@ const App: React.FC = () => {
           if (selectedIds.length === 1) {
               const targetId = selectedIds[0];
               const findAndInsert = (list: FormElement[]): FormElement[] => {
-                  // Check if target is a container
                   for (let i = 0; i < list.length; i++) {
                       if (list[i].id === targetId) {
                           if (['container', 'bootstrap-row', 'bootstrap-col', 'accordion'].includes(list[i].type)) {
-                              // Insert inside at the end
                               return list.map((item, idx) => idx === i ? { ...item, children: [...(item.children || []), ...elementsToAdd] } : item);
                           } else {
-                              // Insert after
                               const newList = [...list];
                               newList.splice(i + 1, 0, ...elementsToAdd);
                               return newList;
@@ -237,7 +248,6 @@ const App: React.FC = () => {
               };
               
               const newList = findAndInsert(prev);
-              // If nothing changed (ID not found?), fallback to append
               if (newList === prev) return [...prev, ...elementsToAdd];
               return newList;
           }
@@ -464,7 +474,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen font-sans text-brand-text overflow-hidden bg-gray-50">
-      {/* Header - Fixed Height */}
       <header className="flex-none flex justify-between items-center px-4 py-2 bg-brand-primary text-white shadow-md z-30">
         <div className="flex items-center space-x-3">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
@@ -481,6 +490,14 @@ const App: React.FC = () => {
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 {isAiAssistantOpen ? 'Close AI' : 'AI Assistant'}
+           </button>
+           <button
+                onClick={handleAnalyzeForm}
+                disabled={formElements.length === 0 || isLoading}
+                className="px-3 py-1.5 bg-indigo-500 text-white text-xs font-semibold rounded shadow-sm hover:bg-indigo-600 transition-colors flex items-center"
+                title="AI analysis of your form structure"
+           >
+                Analyze Form
            </button>
            {selectedIds.length > 0 && (
                <div className="flex space-x-1 mr-2 border-l border-white/20 pl-2">
@@ -503,7 +520,6 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* AI Bar - Collapsible */}
        {isAiAssistantOpen && (
            <div className="flex-none p-4 bg-gray-50 border-b border-gray-200 z-20 shadow-inner animate-fade-in-staggered">
                 <div className="max-w-4xl mx-auto flex flex-col space-y-2">
@@ -537,7 +553,6 @@ const App: React.FC = () => {
             </div>
         )}
 
-      {/* Main Content Area - Flex Grow */}
       <main className="flex flex-grow overflow-hidden relative">
         <div className="h-full z-10 flex-shrink-0 shadow-sm relative">
             <Palette 
@@ -555,7 +570,6 @@ const App: React.FC = () => {
               selectedIds={selectedIds}
               updateElement={updateElement}
             />
-            {/* Floating Action Buttons */}
             <div className="absolute bottom-6 right-8 flex flex-col space-y-3 z-20">
                  <button onClick={() => setShowClearConfirm(true)} disabled={formElements.length === 0} className="p-3 bg-white text-red-500 rounded-full shadow-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-0 transition-all transform hover:scale-105 border border-gray-100" title="Clear All">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import type { FormElement, ElementStyle } from '../types';
 
@@ -68,9 +67,8 @@ const applyMask = (value: string, mask: string) => {
 const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStartEditing, onStopEditing, onUpdate, preview = false, hidden = false, error, forceRequired, children }) => {
   if (hidden && element.type !== 'script') return null;
 
-  const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent, onClickScript, onChangeScript, htmlContent, textContent, headingLevel, altText, inputMask, customErrorMessage, language, code, validationLogic, dataLogic, targetId, ariaLabel, searchable } = element;
+  const { id, type, label, placeholder, options, required, name, subType, styles, disabled, src, rowCount, headers, links, brand, newsTitle, newsContent, newsImage, minLength, maxLength, min, max, step, pattern, scriptContent, onClickScript, onChangeScript, htmlContent, textContent, headingLevel, altText, inputMask, customErrorMessage, language, code, validationLogic, dataLogic, targetId, ariaLabel, searchable, htmlTag } = element;
   
-  // Logic elements are invisible in preview
   if (preview && (type === 'validationLogic' || type === 'dataLogic')) return null;
 
   const isRequired = forceRequired !== undefined ? forceRequired : required;
@@ -132,10 +130,10 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
               fontFamily: s.fontFamily === 'mono' ? 'monospace' : s.fontFamily === 'serif' ? 'serif' : 'inherit',
               fontWeight: s.fontWeight || 'normal',
               fontSize: s.fontSize,
-              backgroundColor: s.backgroundColor, // Inherit or transparent if not set
+              backgroundColor: s.backgroundColor, 
               borderColor: error ? '#ef4444' : (isFocused && s.focusBorderColor ? s.focusBorderColor : s.borderColor),
               borderWidth: s.borderWidth,
-              borderRadius: s.borderRadius, // Will be overridden by class if not set
+              borderRadius: s.borderRadius,
               padding: s.padding,
               color: s.textColor,
               textAlign: s.textAlign || 'left',
@@ -186,9 +184,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       height: (type === 'container' || type === 'iframe') ? '100%' : (styles?.height || 'auto')
   }; 
   
-  // Generic handler for OnChange scripts
   const handleElementChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-      // 1. Handle Masking
       if (inputMask || element.inputMask) {
           const val = e.target.value;
           const masked = applyMask(val, inputMask || element.inputMask || '');
@@ -196,10 +192,8 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
           e.target.value = masked;
       }
 
-      // 2. Execute Custom Script in Preview
       if (preview && onChangeScript) {
           try {
-              // Provide context to the script: event, value, element ID
               const func = new Function('e', 'value', 'id', 'name', onChangeScript);
               func(e, e.target.value, id, name);
           } catch (err) {
@@ -301,7 +295,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       const title = newsTitle || element.newsTitle || "News Title";
       const content = newsContent || element.newsContent || "News Content";
       return (
-          <div 
+          <article 
             className={`border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow bg-white ${pointerEvents} focus:outline-none focus:ring-2 focus:ring-brand-primary`} 
             style={containerStyle}
             role={hasInteraction ? 'button' : undefined}
@@ -310,7 +304,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             onKeyDown={handleContainerKeyDown}
             aria-label={ariaLabel || `News card: ${title}`}
           >
-              <img src={displayImage} alt={newsTitle || "News"} className="w-full h-48 object-cover" />
+              <img src={displayImage} alt={title || "News Image"} className="w-full h-48 object-cover" />
               <div className="p-5">
                   <h3 className="text-xl font-bold text-gray-900 mb-3" style={{ fontFamily: styles?.fontFamily, color: styles?.textColor }}>{title}</h3>
                   <div className={`text-gray-600 text-sm mb-4 transition-all leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>{content}</div>
@@ -318,7 +312,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                           {expanded ? 'Read Less' : 'Read More'}
                    </button>
               </div>
-          </div>
+          </article>
       );
   };
   
@@ -350,7 +344,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   switch (effectiveType) {
     case 'validationLogic':
         return (
-            <div className="w-full p-4 border border-dashed border-red-300 bg-red-50 rounded-lg shadow-sm">
+            <div className="w-full p-4 border border-dashed border-red-300 bg-red-50 rounded-lg shadow-sm" role="alert">
                 <div className="flex items-center text-red-700 font-bold text-xs uppercase mb-1">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                     Validation Rule
@@ -381,13 +375,14 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'html-block':
         return (htmlContent || element.htmlContent) || preview ? <div className="w-full" style={containerStyle} dangerouslySetInnerHTML={{ __html: htmlContent || element.htmlContent || '' }} /> : <div className="w-full p-4 border border-dashed border-gray-400 bg-gray-50 text-gray-500 text-center text-sm rounded">HTML Block</div>;
     case 'divider':
-        return <hr className="w-full border-t my-4" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} />;
+        return <hr className="w-full border-t my-4" style={{ borderColor: styles?.borderColor || '#e5e7eb', borderWidth: styles?.borderWidth || '1px' }} aria-hidden="true" />;
     case 'image':
+         const finalAlt = (altText !== undefined) ? altText : (element.altText !== undefined ? element.altText : label);
          return (
             <div className="w-full" style={containerStyle}>
                 <img 
                     src={src || "https://via.placeholder.com/300x200?text=Image+Placeholder"} 
-                    alt={altText || element.altText || label} 
+                    alt={finalAlt} 
                     className={`max-w-full h-auto rounded-md ${pointerEvents}`}
                     style={{...appearanceStyles, width: '100%', height: styles?.height ? '100%' : 'auto', objectFit: 'cover'}}
                     onClick={hasInteraction ? handleButtonClick : undefined}
@@ -461,7 +456,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             <div className="flex items-center" style={containerStyle}>
                  <div className={`relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in ${pointerEvents}`}>
                     <input type="checkbox" name={name} id={name} onChange={handleElementChange} className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 checked:right-0 checked:border-brand-primary" style={{right: 'auto', left: 0}} aria-label={ariaLabel || label} />
-                    <label htmlFor={name} className="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer"></label>
+                    <label htmlFor={name} className="toggle-label block overflow-hidden h-5 rounded-full bg-gray-300 cursor-pointer" aria-hidden="true"></label>
                 </div>
                 <label htmlFor={name} className="ml-2 block text-sm font-medium text-gray-700 cursor-pointer"><EditableLabel forCheckboxOrRadio={true} /></label>
             </div>
@@ -473,7 +468,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                     <span>{label}</span>
                     <span className="uppercase text-gray-500">{language || 'text'}</span>
                 </div>
-                <pre className="bg-gray-900 text-gray-100 p-4 rounded-b-lg overflow-x-auto font-mono text-sm border-t border-gray-700">
+                <pre className="bg-gray-900 text-gray-100 p-4 rounded-b-lg overflow-x-auto font-mono text-sm border-t border-gray-700" tabIndex={0} aria-label={`Code block: ${label}`}>
                     <code>{code || '// Enter your code here...'}</code>
                 </pre>
             </div>
@@ -483,7 +478,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             <div className="w-full" style={containerStyle}>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
                 <div className={`border border-gray-300 rounded-lg overflow-hidden ${pointerEvents}`} role="textbox" aria-multiline="true" aria-label={ariaLabel || label}>
-                    <div className="bg-gray-50 border-b border-gray-300 p-2 flex space-x-2">
+                    <div className="bg-gray-50 border-b border-gray-300 p-2 flex space-x-2" aria-hidden="true">
                         <div className="h-6 w-6 bg-gray-200 rounded"></div>
                         <div className="h-6 w-6 bg-gray-200 rounded"></div>
                         <div className="h-6 w-6 bg-gray-200 rounded"></div>
@@ -498,7 +493,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'typography':
         const Tag = (headingLevel || element.headingLevel || 'p') as React.ElementType;
         const textClasses = { h1: 'text-4xl font-extrabold mb-4 tracking-tight', h2: 'text-3xl font-bold mb-3 tracking-tight', h3: 'text-2xl font-bold mb-3', h4: 'text-xl font-bold mb-2', h5: 'text-lg font-bold mb-2', h6: 'text-base font-bold mb-2', p: 'text-base mb-2 leading-relaxed', span: 'text-base' };
-        return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[Tag as keyof typeof textClasses] || 'text-base'}`} style={appearanceStyles}>{textContent || element.textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
+        return <div style={containerStyle} className="w-full"><Tag className={`${textClasses[Tag as keyof typeof textClasses] || 'text-base'}`} style={appearanceStyles} aria-label={ariaLabel}>{textContent || element.textContent || (isEditing ? '' : 'Double click to edit text')}</Tag></div>;
     case 'script':
         if (preview) return null;
         return <div className="w-full p-3 border border-yellow-400 bg-yellow-50 rounded-md flex items-center shadow-sm font-mono text-xs text-yellow-800">JS Snippet: {label}</div>;
@@ -515,7 +510,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         } else if (type === 'bootstrap-col') {
             extraStyles = { paddingRight: '0.5rem', paddingLeft: '0.5rem' };
             if (styles?.width && styles.width !== '100%' && styles.width !== 'auto') {
-                extraStyles = { ...extraStyles, flex: 'none', width: styles.width, minWidth: '0' };
+                extraStyles = { ...extraStyles, flex: 'none', width: '100%', minWidth: '0' };
             } else {
                 extraStyles = { ...extraStyles, flex: '1 0 0%', minWidth: '200px' };
             }
@@ -523,20 +518,31 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
         const isRowLayout = type === 'bootstrap-row' || styles?.flexDirection === 'row';
         const flexClasses = `flex ${isRowLayout ? 'flex-row' : 'flex-col'}`;
+        const ContainerTag = (htmlTag as React.ElementType) || 'div';
+        
+        const isSemanticTag = htmlTag && ['section', 'article', 'main', 'nav', 'aside', 'header', 'footer'].includes(htmlTag);
+        const hasLabel = !!(ariaLabel || (type === 'container' && label));
+        
+        let role = undefined;
+        if (!isSemanticTag && hasLabel) {
+            role = 'region';
+        } else if (type === 'bootstrap-row' && !isSemanticTag && !hasLabel) {
+            role = 'group';
+        }
 
         return (
-            <div 
+            <ContainerTag 
                 className={`w-full ${borderClass} ${type === 'container' ? defaultStackClass : ''} p-4 ${flexClasses} focus:outline-none focus:ring-2 focus:ring-brand-primary`} 
                 style={{ ...containerStyle, ...extraStyles, ...styles }}
-                role={type === 'container' ? undefined : 'group'}
+                role={role}
                 tabIndex={hasInteraction ? 0 : undefined}
                 onClick={hasInteraction ? handleButtonClick : undefined}
                 onKeyDown={handleContainerKeyDown}
-                aria-label={ariaLabel || label}
+                aria-label={ariaLabel || (type === 'container' ? label : undefined)}
             >
                 {!preview && <div className="mb-2 w-full"><label className="block text-sm font-semibold text-gray-700 mb-1 tracking-wide"><EditableLabel /></label></div>}
                 {children}
-            </div>
+            </ContainerTag>
         );
     case 'accordion': return <AccordionComponent />;
     case 'text':
@@ -574,14 +580,14 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         ? `${commonInputClasses.replace('h-10', '')} p-2` 
         : `${commonInputClasses} appearance-none bg-white pr-10`;
       
-      // Searchable (Combobox) Logic using Datalist
       if (searchable && !isMultiple) {
+          const datalistId = `datalist-${id}`;
           return (
             <div className="w-full" style={containerStyle}>
               <label htmlFor={name} className="block text-sm font-semibold text-gray-700 mb-1.5"><EditableLabel /></label>
               <div className="relative">
                 <input
-                    list={`${name}-list`}
+                    list={datalistId}
                     ref={inputRef as React.RefObject<HTMLInputElement>}
                     id={name}
                     name={name}
@@ -592,7 +598,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                     className={commonInputClasses}
                     style={inputStyle}
                 />
-                <datalist id={`${name}-list`}>
+                <datalist id={datalistId}>
                     {options?.map((option, index) => <option key={index} value={option} />)}
                 </datalist>
                 <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
@@ -769,10 +775,10 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         );
     case 'navbar':
         return (
-            <div className="w-full bg-white border-b border-gray-200 shadow-sm py-3 px-6 flex items-center justify-between" style={containerStyle}>
+            <nav className="w-full bg-white border-b border-gray-200 shadow-sm py-3 px-6 flex items-center justify-between" style={containerStyle} aria-label={ariaLabel || label}>
                 <div className="font-bold text-xl text-brand-primary" style={{ color: styles?.textColor }}>{brand || label}</div>
                 <div className="space-x-6">{links?.map((link, i) => <a key={i} href={link.url} className={`text-gray-600 hover:text-brand-primary font-medium transition-colors ${pointerEvents}`} onClick={e => e.preventDefault()} style={{ color: styles?.textColor }}>{link.label}</a>) || <span className="text-gray-400 italic">No links configured</span>}</div>
-            </div>
+            </nav>
         );
     case 'news-card':
         return <NewsCardComponent />;

@@ -50,6 +50,7 @@ const styleSchema: Schema = {
         textColor: { type: Type.STRING },
         borderColor: { type: Type.STRING },
         borderWidth: { type: Type.STRING },
+        borderStyle: { type: Type.STRING },
         borderRadius: { type: Type.STRING },
         padding: { type: Type.STRING },
         margin: { type: Type.STRING },
@@ -60,11 +61,14 @@ const styleSchema: Schema = {
         width: { type: Type.STRING },
         height: { type: Type.STRING },
         minWidth: { type: Type.STRING },
+        minHeight: { type: Type.STRING },
         display: { type: Type.STRING, enum: ['block', 'flex', 'grid'] },
         flexDirection: { type: Type.STRING, enum: ['row', 'column', 'row-reverse', 'column-reverse'] },
         justifyContent: { type: Type.STRING, enum: ['flex-start', 'center', 'flex-end', 'space-between', 'space-around'] },
         alignItems: { type: Type.STRING, enum: ['flex-start', 'center', 'flex-end', 'stretch'] },
+        flexWrap: { type: Type.STRING, enum: ['nowrap', 'wrap', 'wrap-reverse'] },
         gap: { type: Type.STRING },
+        gridTemplateColumns: { type: Type.STRING },
         textAlign: { type: Type.STRING, enum: ['left', 'center', 'right', 'justify'] },
         color: { type: Type.STRING, enum: ['primary', 'secondary', 'danger'] },
         size: { type: Type.STRING, enum: ['small', 'medium', 'large'] }
@@ -191,7 +195,12 @@ export const getFormSuggestionsFromData = async (dataSummary: string) => {
     const ai = getAI();
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Analyze the following dataset structure and generate a comprehensive HTML form to capture this data:\n${dataSummary}`,
+        contents: `Analyze the following input. It could be a dataset summary, a raw CSV/JSON dump, a code snippet (HTML/JS/CSS), or a plain text description.
+        
+        Generate a comprehensive HTML form structure (JSON format) that best matches the fields, data types, logic, or requirements found in the input.
+        
+        Input Data:
+        ${dataSummary.substring(0, 15000)}`,
         config: {
             responseMimeType: "application/json",
             responseSchema: responseSchema,
@@ -221,19 +230,29 @@ export const getStyleSuggestions = async (element: FormElement, stylePrompt?: st
     if (!process.env.API_KEY) throw new Error("API key is not configured.");
     const ai = getAI();
     
+    // Context about children helps the model decide on Layout (Flex/Grid) vs Block
+    const childrenContext = element.children && element.children.length > 0 
+        ? `This element is a container with ${element.children.length} children (types: ${element.children.map(c => c.type).join(', ')}). Focus on layout logic.` 
+        : "This is a standalone leaf element. Focus on typography and appearance.";
+
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Design a modern and accessible CSS style configuration for a "${element.label}" (${element.type}) element.
-        User Request: ${stylePrompt || "Modern and accessible CSS styles, focusing on layout, spacing, and typography."}
-
-        Guidelines:
-        - Layout: Use Flexbox or Grid for containers.
-        - Spacing: Use meaningful padding/margin (e.g., 1rem, 16px).
-        - Typography: Ensure readable font sizes and weights.
-        - Accessibility: Ensure high contrast ratios for text colors against backgrounds.
-        - Aesthetics: Modern, flat, or soft-shadow design language unless specified otherwise.
+        contents: `You are a UI/UX Expert specializing in modern, accessible web design.
         
-        Return a valid JSON object matching the requested schema.`,
+        Task: Generate a CSS style configuration (JSON) for a Form Element.
+        Element Type: "${element.type}" (${element.label})
+        Context: ${childrenContext}
+        User Request: "${stylePrompt || "Modern, clean, accessible"}"
+
+        Design Requirements:
+        1. **Modern Layout**: Use 'flex' or 'grid' for containers to organize children. Use 'gap' for spacing.
+        2. **Typography**: Use legible font sizes (min 14px), font weights, and ample line height.
+        3. **Spacing**: Use generous padding (e.g., 16px, 24px) and rounded corners (e.g., 8px, 12px) for a soft, friendly look.
+        4. **Visual Hierarchy**: Use soft box-shadows (e.g., '0 4px 6px -1px rgba(0, 0, 0, 0.1)') for depth if it's a card/container.
+        5. **Accessibility**: Ensure high contrast for 'textColor' against 'backgroundColor'. Avoid pure black (#000) on pure white (#fff); prefer softer grays (e.g., #1f2937 on #ffffff or #f9fafb).
+        6. **Responsiveness**: Use 'flexWrap: wrap' if children might overflow.
+        
+        Return ONLY valid JSON matching the schema.`,
         config: {
             responseMimeType: "application/json",
             responseSchema: styleSchema,

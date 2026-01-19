@@ -114,6 +114,7 @@ export interface FormElement {
   multiple?: boolean;
   children?: FormElement[];
   subType?: 'text' | 'email' | 'password' | 'tel' | 'url';
+  htmlTag?: string; // Semantic HTML tag (div, section, article, etc.)
   minLength?: number;
   maxLength?: number;
   min?: number | string;
