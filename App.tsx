@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import Palette from './components/Palette';
 import Canvas from './components/Canvas';
@@ -50,6 +51,14 @@ const createNewElement = (data: any): FormElement => ({
   altText: data.altText
 });
 
+// Utility to recursively delete items from the tree
+const recursiveDelete = (tree: FormElement[], id: string): FormElement[] => {
+    return tree.filter(node => node.id !== id).map(node => ({
+        ...node,
+        children: node.children ? recursiveDelete(node.children, id) : undefined
+    }));
+};
+
 const App: React.FC = () => {
   const [formElements, setFormElements] = useState<FormElement[]>(() => {
     try {
@@ -87,7 +96,7 @@ const App: React.FC = () => {
       }
   }, []);
 
-  const updateFormElementsWithHistory = (newElements: FormElement[] | ((prev: FormElement[]) => FormElement[])) => {
+  const updateFormElementsWithHistory = useCallback((newElements: FormElement[] | ((prev: FormElement[]) => FormElement[])) => {
     setFormElements(prev => {
         const resolvedElements = typeof newElements === 'function' ? newElements(prev) : newElements;
         const currentHistory = history.slice(0, historyIndex + 1);
@@ -96,7 +105,43 @@ const App: React.FC = () => {
         setHistoryIndex(nextHistory.length - 1);
         return resolvedElements;
     });
-  };
+  }, [history, historyIndex]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    updateFormElementsWithHistory((prev) => {
+        let nextTree = prev;
+        selectedIds.forEach(id => {
+            nextTree = recursiveDelete(nextTree, id);
+        });
+        return nextTree;
+    });
+    setSelectedIds([]);
+  }, [selectedIds, updateFormElementsWithHistory]);
+
+  // Handle Keyboard Shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        // Prevent deleting elements while typing in an input or textarea
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === 'INPUT' || 
+          target.tagName === 'TEXTAREA' || 
+          target.isContentEditable ||
+          target.closest('.form-control') // Additional check for the dynamic inputs in the canvas
+        ) {
+          return;
+        }
+
+        e.preventDefault();
+        handleDeleteSelected();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedIds, handleDeleteSelected]);
   
   const handleUndo = () => {
       if (historyIndex > 0) {
@@ -191,7 +236,7 @@ const App: React.FC = () => {
 
   const updateElement = useCallback((id: string, updatedProps: Partial<FormElement>) => {
     updateFormElementsWithHistory((prev) => recursiveUpdateElement(prev, id, updatedProps));
-  }, [historyIndex]);
+  }, [updateFormElementsWithHistory]);
 
   const deepCloneWithNewIds = (element: FormElement): FormElement => {
       const newId = `${element.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -218,7 +263,7 @@ const App: React.FC = () => {
           };
           return insertAfter(prev);
       });
-  }, [historyIndex]);
+  }, [updateFormElementsWithHistory]);
 
   const handleAddElement = (data: any) => {
       updateFormElementsWithHistory(prev => {

@@ -53,7 +53,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     const handleMouseMove = (e: MouseEvent) => {
         const deltaX = e.clientX - resizing.startX;
         const deltaY = e.clientY - resizing.startY;
-        // For columns, we prioritize width. For others, both.
         const newWidth = Math.max(50, resizing.startW + deltaX);
         const newHeight = Math.max(20, resizing.startH + deltaY);
         
@@ -84,7 +83,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     e.stopPropagation(); 
     setIsDragging(false);
     
-    // Prefer dragOverTarget if it exists and matches the context, otherwise use passed args
     const targetParentId = dragOverTarget ? dragOverTarget.parentId : passedTargetParentId;
     const dropIndex = dragOverTarget ? dragOverTarget.index : passedDropIndex;
 
@@ -101,7 +99,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
         return;
     }
 
-    // If moving an existing item
     if (draggedItem.id) {
         setElements((prev) => {
              if (draggedItem.id === targetParentId) return prev;
@@ -111,12 +108,9 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
              let newTree = recursiveDelete(prev, draggedItem.id);
              
              let finalIndex = dropIndex;
-             // Adjust index if moving within the same parent
              if (found.parentId === targetParentId) {
-                 // Get the list of children of the parent (or root list)
                  const siblings = found.parentId === null ? prev : prev.find(n => n.id === found.parentId)?.children || [];
                  const oldIndex = siblings.findIndex(x => x.id === draggedItem.id);
-                 // If we are moving downwards in the same list, the index shifts by 1 because the item is removed first
                  if (oldIndex < dropIndex) finalIndex--;
              }
              if (finalIndex < 0) finalIndex = 0;
@@ -130,7 +124,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
         return;
     }
     
-    // If adding a new item
     const getSmartLabel = (type: string, name?: string, label?: string) => {
         if (label && label !== 'New Element') return label;
         if (name && !name.match(/^(el_|group_|ai_group_)\d+$/) && !name.startsWith('col')) {
@@ -183,21 +176,16 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     setIsDragging(true);
 
     const rect = e.currentTarget.getBoundingClientRect();
-    
-    // Improved Nesting Logic for Containers/Columns
     const isContainer = ['container', 'bootstrap-col', 'accordion', 'bootstrap-row'].includes(element.type);
     
     if (isContainer) {
-        // If empty, always inside
         if (!element.children || element.children.length === 0) {
              setDragOverTarget({ parentId: element.id, index: 0, position: 'inside' });
              return;
         }
 
-        // If populated, determine if we are hovering the "edge" (reorder) or "center" (nest)
-        // This is important for dropping *into* a column vs *moving* the column
         const isRow = layoutDirection === 'row';
-        const reorderZoneSize = 15; // px from edge to trigger reorder
+        const reorderZoneSize = 15; 
         
         let isInReorderZone = false;
         if (isRow) {
@@ -207,7 +195,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
         }
 
         if (!isInReorderZone) {
-            // Hovering center area -> Nest inside at the end
             setDragOverTarget({ 
                 parentId: element.id, 
                 index: element.children.length, 
@@ -217,7 +204,6 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
         }
     }
 
-    // Standard Reorder Logic
     let isAfter = false;
     if (layoutDirection === 'row') {
         const midX = rect.left + rect.width / 2;
@@ -270,13 +256,11 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                 const isSelected = selectedIds.includes(element.id);
                 const s = element.styles || {};
                 
-                // Determine children layout direction
                 let childLayoutDirection: 'row' | 'column' = 'column';
                 if (element.type === 'bootstrap-row' || (s.display === 'flex' && s.flexDirection === 'row')) {
                     childLayoutDirection = 'row';
                 }
 
-                // Wrapper Styles Logic:
                 const wrapperStyle: React.CSSProperties = { 
                     width: s.width, 
                     height: s.height, 
@@ -287,14 +271,12 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                     flexBasis: s.flexBasis,
                     alignSelf: s.alignSelf,
                     marginBottom: layoutDirection === 'column' ? '12px' : '0',
-                    marginRight: layoutDirection === 'row' ? '0' : '0',
                 };
 
                 const showDropBefore = dragOverTarget?.parentId === parentId && dragOverTarget?.index === index && dragOverTarget?.position === 'before';
                 const showDropAfter = dragOverTarget?.parentId === parentId && dragOverTarget?.index === index + 1 && dragOverTarget?.position === 'after';
                 const showDropInside = dragOverTarget?.parentId === element.id && dragOverTarget?.position === 'inside';
 
-                // Bootstrap row logic: Remove gap in Canvas to align with renderer negative margins
                 const flexGapClass = (element.type === 'bootstrap-row') ? '' : 'gap-2';
 
                 return (
@@ -338,10 +320,9 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                                         onDrop={(e) => handleDrop(e, element.id, element.children?.length || 0)}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            // Select parent to indicate intent to add to it
                                             handleSelect(element.id);
                                         }}
-                                        title="Drop here or click to select this column"
+                                        title="Drop here or click to select this container"
                                     >
                                         <div className={`transform transition-transform ${isDragging || (!element.children || element.children.length === 0) ? 'scale-100' : 'scale-0'}`}>
                                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
