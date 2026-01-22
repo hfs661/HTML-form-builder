@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { FormElement, DataLogicRule, ValidationLogic, ElementStyle, ConditionalRule, BulkAction, ElementLogic, LogicCondition } from '../types';
 import { getStyleSuggestions, getScriptSuggestions, getContentSuggestion, suggestContainerConfig } from '../services/geminiService';
@@ -330,9 +331,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
     );
   }
 
-  const isInputType = ['text', 'number', 'date', 'email', 'textarea', 'select', 'inputMask', 'password', 'file'].includes(selectedElement.type);
+  const isInputType = ['text', 'number', 'date', 'email', 'textarea', 'select', 'inputMask', 'password', 'file', 'checkbox', 'radio'].includes(selectedElement.type);
   const isTextType = ['text', 'textarea', 'email'].includes(selectedElement.type);
   const isNumberType = ['number', 'range', 'progress', 'rating'].includes(selectedElement.type);
+  const hasOptions = ['select', 'radio'].includes(selectedElement.type);
 
   return (
     <div className="w-full md:w-72 lg:w-80 bg-brand-light-gray h-full flex flex-col border-l border-gray-300 shadow-xl z-20">
@@ -376,11 +378,12 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
 
                  {isInputType && (
                      <>
-                        <PropertyInput label="Placeholder" name="placeholder" value={selectedElement.placeholder} onChange={(e) => updateElement(selectedElement.id, { placeholder: e.target.value })} />
+                        {['text', 'number', 'email', 'textarea', 'inputMask', 'password'].includes(selectedElement.type) && (
+                            <PropertyInput label="Placeholder" name="placeholder" value={selectedElement.placeholder} onChange={(e) => updateElement(selectedElement.id, { placeholder: e.target.value })} />
+                        )}
                         <div className="grid grid-cols-2 gap-4 mt-3">
                             <PropertyToggle label="Required" checked={!!selectedElement.required} onChange={(val) => updateElement(selectedElement.id, { required: val })} />
                             <PropertyToggle label="Disabled" checked={!!selectedElement.disabled} onChange={(val) => updateElement(selectedElement.id, { disabled: val })} />
-                            <PropertyToggle label="Hidden" checked={!!selectedElement.hidden} onChange={(val) => updateElement(selectedElement.id, { hidden: val })} />
                         </div>
                      </>
                  )}
@@ -402,6 +405,18 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                  )}
              </CollapsibleSection>
              
+             {hasOptions && (
+                 <CollapsibleSection title="Options List" defaultOpen>
+                     {selectedElement.type === 'select' && (
+                         <>
+                             <PropertyToggle label="Allow Multiple Selections" checked={!!selectedElement.multiple} onChange={(val) => updateElement(selectedElement.id, { multiple: val })} />
+                             <PropertyToggle label="Searchable (Combobox)" checked={!!selectedElement.searchable} onChange={(val) => updateElement(selectedElement.id, { searchable: val })} />
+                         </>
+                     )}
+                     <PropertyTextarea label="Options (one per line)" value={selectedElement.options?.join('\n') || ''} onChange={(e) => updateElement(selectedElement.id, { options: e.target.value.split('\n') })} />
+                 </CollapsibleSection>
+             )}
+
              {selectedElement.type === 'code-block' && (
                  <CollapsibleSection title="Code Settings" defaultOpen>
                     <PropertySelect 
@@ -481,19 +496,6 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
              {selectedElement.type === 'file' && (
                  <CollapsibleSection title="File Options">
                       <PropertyInput label="Accept (e.g. .pdf, image/*)" name="accept" value={selectedElement.accept} onChange={(e) => updateElement(selectedElement.id, { accept: e.target.value })} />
-                 </CollapsibleSection>
-             )}
-
-             {selectedElement.type === 'select' && (
-                 <CollapsibleSection title="Dropdown Configuration" defaultOpen>
-                     <PropertyToggle label="Allow Multiple Selections" checked={!!selectedElement.multiple} onChange={(val) => updateElement(selectedElement.id, { multiple: val })} />
-                     <PropertyToggle label="Searchable (Combobox)" checked={!!selectedElement.searchable} onChange={(val) => updateElement(selectedElement.id, { searchable: val })} />
-                     <PropertyToggle label="Treat first option as Placeholder?" checked={!!selectedElement.hasPlaceholderOption} onChange={(val) => updateElement(selectedElement.id, { hasPlaceholderOption: val })} />
-                     <PropertyTextarea label="Options (one per line)" value={selectedElement.options?.join('\n') || ''} onChange={(e) => updateElement(selectedElement.id, { options: e.target.value.split('\n') })} />
-                     <div className="p-2 bg-yellow-50 border border-yellow-100 rounded text-[10px] text-yellow-800 mb-2">
-                         <strong>Accurate Validation:</strong> When placeholder is on, the form will treat the first option as "empty" if required.
-                     </div>
-                     <PropertyTextarea label="Prohibited Selections (validation error)" value={selectedElement.prohibitedValues?.join('\n') || ''} onChange={(e) => updateElement(selectedElement.id, { prohibitedValues: e.target.value.split('\n') })} />
                  </CollapsibleSection>
              )}
 
