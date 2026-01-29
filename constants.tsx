@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { PaletteItem, SnippetItem } from './types';
 
 export const STANDARD_ELEMENTS: PaletteItem[] = [
@@ -13,8 +13,17 @@ export const STANDARD_ELEMENTS: PaletteItem[] = [
     )
   },
   {
+    type: 'accordion',
+    label: 'Accordion',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+      </svg>
+    )
+  },
+  {
     type: 'bootstrap-row',
-    label: 'Flex Row (Wrapper)',
+    label: 'Responsive Row',
     icon: (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
             <path d="M2 4a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2zm0 6a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1v-2z" />
@@ -167,6 +176,62 @@ export const STANDARD_ELEMENTS: PaletteItem[] = [
   },
 ];
 
+export const BOOTSTRAP_GRID_SNIPPETS: SnippetItem[] = [
+    {
+        label: 'Responsive 2-Col Grid',
+        icon: (
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm8 1H4v8h6V6zm2 0v8h6V6h-6z" />
+             </svg>
+        ),
+        elements: [{
+            type: 'bootstrap-row',
+            label: 'Two Column Row',
+            styles: { flexWrap: 'wrap', gap: '20px' },
+            children: [
+                { type: 'bootstrap-col', label: 'Col Left', colSpan: 6, styles: { padding: '16px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1', backgroundColor: '#f8fafc' } },
+                { type: 'bootstrap-col', label: 'Col Right', colSpan: 6, styles: { padding: '16px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1', backgroundColor: '#f8fafc' } }
+            ]
+        }]
+    },
+    {
+        label: 'Sidebar Layout (4+8)',
+        icon: (
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm5 1H4v8h3V6zm1 0v8h8V6H8z" />
+             </svg>
+        ),
+        elements: [{
+            type: 'bootstrap-row',
+            label: 'Sidebar Row',
+            styles: { flexWrap: 'wrap', gap: '0px' },
+            children: [
+                /* Resolved: Added borderStyle to ensure borderRightWidth is visible */
+                { type: 'bootstrap-col', label: 'Sidebar', colSpan: 4, styles: { padding: '20px', borderRightWidth: '1px', borderStyle: 'solid', borderColor: '#e2e8f0', minHeight: '120px' } },
+                { type: 'bootstrap-col', label: 'Main Content', colSpan: 8, styles: { padding: '20px', minHeight: '120px' } }
+            ]
+        }]
+    },
+    {
+        label: 'Equal 3-Col Grid',
+        icon: (
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm5 1H4v8h3V6zm1 0v8h4V6H8zm5 0v8h3V6h-3z" />
+             </svg>
+        ),
+        elements: [{
+            type: 'bootstrap-row',
+            label: 'Three Column Row',
+            styles: { flexWrap: 'wrap', gap: '15px' },
+            children: [
+                { type: 'bootstrap-col', label: 'Col 1', colSpan: 4, styles: { padding: '12px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
+                { type: 'bootstrap-col', label: 'Col 2', colSpan: 4, styles: { padding: '12px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
+                { type: 'bootstrap-col', label: 'Col 3', colSpan: 4, styles: { padding: '12px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } }
+            ]
+        }]
+    }
+];
+
 export const WEBSITE_SNIPPETS: SnippetItem[] = [
     {
         label: 'Hero Section',
@@ -185,204 +250,10 @@ export const WEBSITE_SNIPPETS: SnippetItem[] = [
                 ]
             }
         ]
-    },
-    {
-        label: 'Pricing Table',
-        elements: [
-            {
-                type: 'container',
-                label: 'Pricing Grid',
-                styles: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', padding: '40px' },
-                children: [
-                    { type: 'container', label: 'Basic Plan', styles: { padding: '24px', borderWidth: '1px', borderColor: '#e5e7eb', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center' }, children: [
-                        { type: 'typography', headingLevel: 'h3', textContent: 'Basic', styles: { fontWeight: 'bold' } },
-                        { type: 'typography', headingLevel: 'h2', textContent: '$19/mo', styles: { fontSize: '32px', fontWeight: 'bold', margin: '15px 0' } },
-                        { type: 'button', label: 'Choose Plan', styles: { width: '100%' } }
-                    ]},
-                    { type: 'container', label: 'Pro Plan', styles: { padding: '24px', borderWidth: '1px', borderColor: '#2563eb', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: '#eff6ff' }, children: [
-                        { type: 'typography', headingLevel: 'h3', textContent: 'Pro', styles: { fontWeight: 'bold', textColor: '#2563eb' } },
-                        { type: 'typography', headingLevel: 'h2', textContent: '$49/mo', styles: { fontSize: '32px', fontWeight: 'bold', margin: '15px 0' } },
-                        { type: 'button', label: 'Choose Plan', styles: { width: '100%', backgroundColor: '#2563eb', textColor: 'white' } }
-                    ]},
-                    { type: 'container', label: 'Enterprise Plan', styles: { padding: '24px', borderWidth: '1px', borderColor: '#e5e7eb', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center' }, children: [
-                        { type: 'typography', headingLevel: 'h3', textContent: 'Enterprise', styles: { fontWeight: 'bold' } },
-                        { type: 'typography', headingLevel: 'h2', textContent: '$99/mo', styles: { fontSize: '32px', fontWeight: 'bold', margin: '15px 0' } },
-                        { type: 'button', label: 'Choose Plan', styles: { width: '100%' } }
-                    ]}
-                ]
-            }
-        ]
-    },
-    {
-        label: 'Contact Form',
-        elements: [
-            {
-                type: 'container',
-                label: 'Contact Section',
-                styles: { maxWidth: '600px', margin: '0 auto', padding: '30px', backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' },
-                children: [
-                    { type: 'typography', headingLevel: 'h2', textContent: 'Contact Us', styles: { marginBottom: '20px', textAlign: 'center' } },
-                    { type: 'text', label: 'Full Name', placeholder: 'John Doe', required: true, name: 'contact_name' },
-                    { type: 'text', label: 'Email Address', subType: 'email', placeholder: 'john@example.com', required: true, name: 'contact_email' },
-                    { type: 'textarea', label: 'Message', placeholder: 'How can we help you?', required: true, name: 'contact_message' },
-                    { type: 'button', label: 'Send Message', styles: { width: '100%', marginTop: '10px' }, name: 'contact_submit' }
-                ]
-            }
-        ]
     }
 ];
 
-export const BOOTSTRAP_GRID_SNIPPETS: SnippetItem[] = [
-    {
-        label: '2 Columns',
-        icon: (
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm8 1H4v8h6V6zm2 0v8h6V6h-6z" />
-             </svg>
-        ),
-        elements: [{
-            type: 'bootstrap-row',
-            label: '2-Col Row',
-            children: [
-                { type: 'bootstrap-col', label: 'Column 1', styles: { padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Column 2', styles: { padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } }
-            ]
-        }]
-    },
-    {
-        label: '3 Columns',
-        icon: (
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm5 1H4v8h3V6zm1 0v8h4V6H8zm5 0v8h3V6h-3z" />
-             </svg>
-        ),
-        elements: [{
-            type: 'bootstrap-row',
-            label: '3-Col Row',
-            children: [
-                { type: 'bootstrap-col', label: 'Column 1', styles: { padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Column 2', styles: { padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Column 3', styles: { padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } }
-            ]
-        }]
-    },
-    {
-        label: '12 Columns',
-         icon: (
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm2 2v2h2V5H5zm4 0v2h2V5H9zm4 0v2h2V5h-2zM5 9v2h2V9H5zm4 0v2h2V9H9zm4 0v2h2V9h-2zM5 13v2h2v-2H5zm4 0v2h2v-2H9zm4 0v2h2v-2h-2z" clipRule="evenodd" />
-             </svg>
-        ),
-        elements: [{
-            type: 'bootstrap-row',
-            label: '12-Col Row',
-            children: Array.from({length: 12}).map((_, i) => ({
-                type: 'bootstrap-col',
-                label: `Col ${i+1}`,
-                styles: { padding: '4px', minHeight: '40px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1', fontSize: '10px', textAlign: 'center' }
-            }))
-        }]
-    }
-];
-
-export const LAYOUT_SNIPPETS: SnippetItem[] = [
-    {
-        label: 'Sidebar Left',
-         icon: (
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm5 1H4v8h3V6zm1 0v8h8V6H8z" />
-             </svg>
-        ),
-        elements: [{
-            type: 'bootstrap-row',
-            label: 'Sidebar Layout',
-            children: [
-                { type: 'bootstrap-col', label: 'Sidebar', styles: { flexGrow: '0', flexBasis: '25%', minWidth: '200px', padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Main', styles: { flexGrow: '1', padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } }
-            ]
-        }]
-    },
-    {
-        label: 'Sidebar Right',
-         icon: (
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm10 1H4v8h8V6zm1 0v8h3V6h-3z" />
-             </svg>
-        ),
-        elements: [{
-            type: 'bootstrap-row',
-            label: 'Sidebar Layout',
-            children: [
-                { type: 'bootstrap-col', label: 'Main', styles: { flexGrow: '1', padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Sidebar', styles: { flexGrow: '0', flexBasis: '25%', minWidth: '200px', padding: '10px', minHeight: '60px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } }
-            ]
-        }]
-    }
-];
-
-export const SCRIPT_SNIPPETS: SnippetItem[] = [
-    {
-        label: 'Interactive User Fetch',
-        elements: [
-            { 
-                type: 'container', 
-                label: 'Fetch Section', 
-                styles: { display: 'flex', flexDirection: 'column', gap: '10px' },
-                children: [
-                    { type: 'select', label: 'Target User List', name: 'targetUserSelect', options: ['Click fetch to load...'] },
-                    { 
-                        type: 'button', 
-                        label: 'Fetch Users Now', 
-                        name: 'fetchTriggerBtn', 
-                        onClickScript: `const select = document.querySelector('select[name="targetUserSelect"]'); if(select) { select.innerHTML = '<option>Loading...</option>'; fetch('https://jsonplaceholder.typicode.com/users').then(res => res.json()).then(data => { select.innerHTML = '<option value="">-- Choose User --</option>'; data.forEach(user => { const opt = document.createElement('option'); opt.value = user.id; opt.text = user.name; select.appendChild(opt); }); }); }`
-                    }
-                ]
-            }
-        ]
-    }
-];
-
-export const STYLE_SNIPPETS: SnippetItem[] = [
-  {
-    label: 'Modern Profile Card',
-    elements: [
-      {
-        type: 'container',
-        label: 'Profile Card',
-        styles: {
-          backgroundColor: '#ffffff',
-          borderRadius: '16px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          maxWidth: '320px',
-          borderWidth: '1px',
-          borderColor: '#f3f4f6'
-        },
-        children: [
-          { type: 'image', label: 'Avatar', src: 'https://i.pravatar.cc/150?u=a042581f4e29026704d', styles: { width: '80px', height: '80px', borderRadius: '50%', marginBottom: '16px' }, name: 'avatar' },
-          { type: 'typography', headingLevel: 'h3', textContent: 'Jane Cooper', styles: { fontWeight: 'bold', marginBottom: '4px' }, id: 'p-n', name: 'profile_name' },
-          { type: 'typography', headingLevel: 'p', textContent: 'Senior Software Engineer', styles: { textColor: '#6b7280', fontSize: '14px', marginBottom: '16px' }, id: 'p-t', name: 'profile_title' },
-          { type: 'button', label: 'Follow User', styles: { backgroundColor: '#3b82f6', textColor: '#ffffff', borderRadius: '8px', padding: '8px 16px', width: '100%' }, name: 'follow_btn' }
-        ]
-      }
-    ]
-  }
-];
-
-export const SNIPPETS: SnippetItem[] = [
-    {
-        label: 'Modern Login',
-        elements: [
-            { type: 'container', label: 'Login Box', id: 'login-box', name: 'loginBox', styles: { maxWidth: '400px', margin: '0 auto', padding: '2rem', backgroundColor: '#fff', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }, children: [
-                { type: 'typography', headingLevel: 'h2', textContent: 'Sign In', styles: { textAlign: 'center', marginBottom: '1.5rem' }, id: 'l-h', name: 'l-h', label: 'H' },
-                { type: 'text', label: 'Email', subType: 'email', name: 'email', id: 'email-input', required: true, placeholder: 'name@company.com' },
-                { type: 'text', label: 'Password', subType: 'password', name: 'password', id: 'password-input', required: true, placeholder: '••••••••' },
-                { type: 'button', label: 'Continue', id: 'submit-btn', name: 'submit', styles: { width: '100%', backgroundColor: '#000', textColor: '#fff', padding: '12px', borderRadius: '6px', marginTop: '1rem' } }
-            ]}
-        ]
-    }
-];
+export const LAYOUT_SNIPPETS: SnippetItem[] = [];
+export const SCRIPT_SNIPPETS: SnippetItem[] = [];
+export const STYLE_SNIPPETS: SnippetItem[] = [];
+export const SNIPPETS: SnippetItem[] = [];

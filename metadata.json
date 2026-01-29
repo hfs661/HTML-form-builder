@@ -1,5 +1,8 @@
 {
-  "name": "Power app form builder working 22Jan2026",
-  "description": "A drag-and-drop interface to build HTML forms for Power Apps, with AI-powered suggestions from Gemini.",
-  "requestFramePermissions": []
+  "name": "PowerStudio AI Form Builder",
+  "description": "A high-performance drag-and-drop form builder with Microsoft Power Apps styling and Gemini AI intelligence.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
 }

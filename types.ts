@@ -6,15 +6,14 @@ export type FormElementType =
   | 'date' | 'number' | 'range' | 'file' | 'color' | 'table' 
   | 'iframe' | 'navbar' | 'news-card' | 'container' | 'script' 
   | 'html-block' | 'typography' | 'image' | 'divider' | 'accordion' | 'reset-button'
-  | 'inputMask' | 'dataLogic' | 'validationLogic' | 'htmlContent' 
-  | 'newsTitle' | 'newsContent' | 'newsImage' | 'altText' | 'headingLevel'
-  | 'video' | 'audio' | 'progress' | 'rating' | 'toggle' | 'rich-text' | 'code-block'
-  | 'bootstrap-row' | 'bootstrap-col';
+  | 'progress' | 'rating' | 'toggle' | 'rich-text' | 'code-block'
+  | 'bootstrap-row' | 'bootstrap-col' | 'video' | 'validationLogic' | 'dataLogic' | 'htmlContent';
 
 export interface ElementStyle {
-  color?: 'primary' | 'secondary' | 'danger';
+  color?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning' | 'info';
   size?: 'small' | 'medium' | 'large';
   fontSize?: string;
+  fontWeight?: string;
   height?: string;
   minHeight?: string;
   width?: string;
@@ -23,36 +22,36 @@ export interface ElementStyle {
   margin?: string;
   marginTop?: string;
   marginBottom?: string;
-  fontFamily?: string;
-  fontWeight?: string;
+  marginLeft?: string;
+  marginRight?: string;
+  padding?: string;
   backgroundColor?: string;
   textColor?: string;
   borderColor?: string;
   borderWidth?: string;
+  /* Support for specific border sides */
+  borderTopWidth?: string;
+  borderRightWidth?: string;
+  borderBottomWidth?: string;
+  borderLeftWidth?: string;
   borderStyle?: string;
   borderRadius?: string;
-  padding?: string;
   textAlign?: 'left' | 'center' | 'right' | 'justify';
-  letterSpacing?: string;
-  lineHeight?: string;
-  textDecoration?: 'none' | 'underline' | 'line-through' | 'overline';
   boxShadow?: string;
   display?: 'block' | 'flex' | 'grid';
   flexDirection?: 'row' | 'column' | 'row-reverse' | 'column-reverse';
-  justifyContent?: 'flex-start' | 'center' | 'flex-end' | 'space-between' | 'space-around';
-  alignItems?: 'flex-start' | 'center' | 'flex-end' | 'stretch';
+  justifyContent?: string;
+  alignItems?: string;
   gap?: string;
-  flexWrap?: 'nowrap' | 'wrap';
-  gridTemplateColumns?: string;
-  gridTemplateRows?: string;
-  gridColumn?: string;
-  gridRow?: string;
+  rowGap?: string;
+  columnGap?: string;
   flexGrow?: string;
   flexShrink?: string;
   flexBasis?: string;
-  alignSelf?: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'baseline' | 'stretch';
-  focusBorderColor?: string;
-  focusBoxShadow?: string;
+  flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
+  gridTemplateColumns?: string;
+  orientation?: 'horizontal' | 'vertical';
+  zIndex?: number;
 }
 
 export type LogicCondition = 'equals' | 'not_equals' | 'contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
@@ -65,48 +64,39 @@ export interface ElementLogic {
 }
 
 export interface ValidationLogic {
-    triggerId: string;
-    condition: LogicCondition | 'matches' | 'regex' | 'prohibited';
-    value: string; 
-    errorMessage: string;
-}
-
-export interface DataLogicRule {
-    triggerId: string;
-    condition: LogicCondition;
-    value: string;
-    result: string;
-    targetProperty: 'value' | 'disabled' | 'required' | 'label' | 'options' | 'hidden';
-}
-
-export interface DataLogic {
-    rules: DataLogicRule[];
-    defaultValue?: string;
+  triggerId?: string;
+  condition: LogicCondition | 'matches' | 'regex' | 'none';
+  value: string; 
+  errorMessage: string;
 }
 
 export interface BulkAction {
-    targetIds: string[];
-    property: 'hidden' | 'disabled' | 'required' | 'value' | 'label' | 'backgroundColor';
-    value: any;
+  targetIds: string[];
+  property: 'hidden' | 'disabled' | 'required' | 'value' | 'label' | 'backgroundColor' | 'textColor';
+  value: any;
 }
 
 export interface ConditionalRule {
-    id: string;
-    condition: LogicCondition;
-    matchValue: string;
-    actions: BulkAction[];
+  id: string;
+  condition: LogicCondition;
+  matchValue: string;
+  actions: BulkAction[];
 }
 
-export type PartialFormElement = Partial<Omit<FormElement, 'children'>> & {
-    children?: PartialFormElement[];
-};
+export interface DataLogicRule {
+  triggerId: string;
+  condition: LogicCondition;
+  value: string;
+  targetProperty: string;
+  result: any;
+}
 
 export interface FormElement {
-  id: string;
+  id?: string;
   type: FormElementType;
-  label: string;
+  label?: string;
   placeholder?: string;
-  name: string;
+  name?: string;
   options?: string[];
   required?: boolean;
   disabled?: boolean;
@@ -114,49 +104,34 @@ export interface FormElement {
   multiple?: boolean;
   children?: FormElement[];
   subType?: 'text' | 'email' | 'password' | 'tel' | 'url';
-  htmlTag?: string; // Semantic HTML tag (div, section, article, etc.)
+  htmlTag?: string;
   minLength?: number;
   maxLength?: number;
   min?: number | string;
   max?: number | string;
   step?: number;
-  pattern?: string;
-  accept?: string;
-  customErrorMessage?: string;
-  inputMask?: string;
-  validationLogic?: ValidationLogic;
-  dataLogic?: DataLogic;
-  conditionalRules?: ConditionalRule[];
   styles?: ElementStyle;
-  logic?: ElementLogic; // Pull logic (Visibility)
+  logic?: ElementLogic; 
+  validationLogic?: ValidationLogic;
+  conditionalRules?: ConditionalRule[];
+  dataLogic?: {
+    rules: DataLogicRule[];
+  };
   src?: string;
-  rowCount?: number;
-  colCount?: number;
-  headers?: string[];
-  links?: { label: string; url: string }[];
-  brand?: string;
-  scriptContent?: string;
+  textContent?: string;
+  headingLevel?: string;
+  altText?: string;
+  code?: string;
+  language?: string;
   onClickScript?: string;
   onChangeScript?: string;
   htmlContent?: string;
-  headingLevel?: string;
-  textContent?: string;
-  altText?: string;
-  newsTitle?: string;
-  newsContent?: string;
-  newsImage?: string;
-  // New props for accurate validation
-  hasPlaceholderOption?: boolean;
-  prohibitedValues?: string[];
-  // New props for code/media
-  language?: string;
-  code?: string;
-  // For standalone logic elements
-  targetId?: string;
-  // Accessibility
-  ariaLabel?: string;
-  // Searchable select
   searchable?: boolean;
+  defaultValue?: string;
+  colSpan?: number; // 1 to 12
+  // Accessibility & Custom Attributes
+  ariaLabel?: string;
+  testId?: string;
 }
 
 export interface PaletteItem {
@@ -167,7 +142,7 @@ export interface PaletteItem {
 
 export interface SnippetItem {
   label: string;
-  elements: PartialFormElement[];
+  elements: Partial<FormElement>[];
   icon?: ReactElement;
-  id?: string; // Optional for user templates
+  id?: string;
 }

@@ -15,7 +15,21 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Helper to find an element in the nested tree
+  // Initialize formData with defaultValue from elements
+  useEffect(() => {
+    const initialData: Record<string, any> = {};
+    const extractDefaults = (list: FormElement[]) => {
+      list.forEach(el => {
+        if (el.name && el.defaultValue !== undefined) {
+          initialData[el.name] = el.defaultValue;
+        }
+        if (el.children) extractDefaults(el.children);
+      });
+    };
+    extractDefaults(elements);
+    setFormData(initialData);
+  }, [elements]);
+
   const findElementById = useCallback((list: FormElement[], id: string): FormElement | null => {
       for (const el of list) {
           if (el.id === id) return el;
@@ -28,8 +42,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   }, []);
 
   const evaluateCondition = (condition: string, value: any, targetValue: string) => {
-    const valStr = value?.toString().toLowerCase() || '';
-    const targetStr = targetValue?.toLowerCase() || '';
+    const valStr = (value ?? '').toString().toLowerCase();
+    const targetStr = (targetValue ?? '').toLowerCase();
     const valNum = Number(value);
     const targetNum = Number(targetValue);
 
@@ -55,57 +69,37 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
 
         const evaluate = (list: FormElement[]) => {
             list.forEach(el => {
-                let isVisible = true;
+                let isVisible = !el.hidden;
                 
-                // 1. Visibility Logic (Legacy Pull)
+                // Visibility Logic (Pull)
                 if (el.logic?.triggerId) {
                     const triggerEl = findElementById(elements, el.logic.triggerId);
                     if (triggerEl) {
-                        const val = formData[triggerEl.name];
+                        const val = formData[triggerEl.name || ''];
                         const matches = evaluateCondition(el.logic.condition, val, el.logic.value);
-                        // If action is show: visible if matches. If action is hide: visible if matches NOT.
-                        // Wait, previous logic was: action 'show' means visible if match. action 'hide' means visible if NO match.
                         isVisible = el.logic.action === 'show' ? matches : !matches;
                     }
                 }
 
-                if (isVisible) {
+                if (isVisible && el.id) {
                     visible.push(el.id);
                     
-                    // 2. Data Logic Rules (Legacy Pull)
-                    if (el.dataLogic?.rules) {
-                        el.dataLogic.rules.forEach(rule => {
-                            const triggerEl = findElementById(elements, rule.triggerId);
-                            if (triggerEl) {
-                                const val = formData[triggerEl.name];
-                                const matches = evaluateCondition(rule.condition, val, rule.value);
-                                if (matches) {
-                                    let result: any = rule.result;
-                                    if (rule.targetProperty === 'options' && typeof rule.result === 'string') {
-                                        result = rule.result.split(',').map(s => s.trim());
-                                    }
-                                    overrides[el.id] = { ...overrides[el.id], [rule.targetProperty]: result };
-                                }
-                            }
-                        });
-                    }
-
-                    // 3. Conditional Rules (Push Logic)
+                    // Conditional Logic (Push - Bulk Actions)
                     if (el.conditionalRules) {
-                        const myVal = formData[el.name];
+                        const myVal = formData[el.name || ''];
                         el.conditionalRules.forEach(rule => {
                             const matches = evaluateCondition(rule.condition, myVal, rule.matchValue);
-
                             if (matches) {
                                 rule.actions.forEach(action => {
                                     action.targetIds.forEach(tId => {
-                                        let finalValue = action.value;
-                                        if (action.property === 'backgroundColor') {
-                                             const targetEl = findElementById(elements, tId);
-                                             const currentStyles = targetEl?.styles || {};
-                                             overrides[tId] = { ...overrides[tId], styles: { ...currentStyles, backgroundColor: finalValue } };
-                                        } else {
-                                             overrides[tId] = { ...overrides[tId], [action.property]: finalValue };
+                                        overrides[tId] = { 
+                                          ...overrides[tId], 
+                                          [action.property]: action.value 
+                                        };
+                                        if (['backgroundColor', 'textColor'].includes(action.property)) {
+                                          const targetEl = findElementById(elements, tId);
+                                          const existingStyles = { ...targetEl?.styles, ...overrides[tId]?.styles };
+                                          overrides[tId].styles = { ...existingStyles, [action.property]: action.value };
                                         }
                                     });
                                 });
@@ -113,24 +107,16 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                         });
                     }
 
-                    // 4. Validation Logic (Accurate real-time check)
-                    let myVal = formData[el.name]?.toString() || '';
+                    // Validation Logic
+                    let myVal = formData[el.name || '']?.toString() || '';
                     let isInvalid = false;
                     let validationMsg = "Invalid value";
 
-                    // Handle Dropdown Placeholders as "empty"
-                    if (el.type === 'select' && el.hasPlaceholderOption && el.options && myVal === el.options[0]) {
-                        myVal = '';
-                    }
-
-                    if (el.required && myVal === '') {
+                    if (el.required && (!formData[el.name || ''] || myVal === '')) {
                         isInvalid = true;
                         validationMsg = "This field is required";
-                    } else if (el.type === 'select' && el.prohibitedValues && el.prohibitedValues.includes(myVal)) {
-                        isInvalid = true;
-                        validationMsg = "This selection is prohibited";
-                    } else if (el.validationLogic?.triggerId || el.validationLogic?.condition === 'regex') {
-                        if (el.validationLogic?.condition === 'regex' && el.validationLogic.value) {
+                    } else if (el.validationLogic?.condition && el.validationLogic.condition !== 'none') {
+                        if (el.validationLogic.condition === 'regex' && el.validationLogic.value) {
                              try {
                                  const regex = new RegExp(el.validationLogic.value);
                                  isInvalid = !regex.test(myVal);
@@ -138,32 +124,21 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                         } else if (el.validationLogic?.triggerId) {
                             const triggerEl = findElementById(elements, el.validationLogic.triggerId);
                             if (triggerEl) {
-                                const triggerVal = formData[triggerEl.name]?.toString() || '';
+                                const triggerVal = formData[triggerEl.name || '']?.toString() || '';
                                 switch (el.validationLogic.condition) {
                                     case 'matches':
-                                    case 'equals':
-                                        isInvalid = myVal !== triggerVal;
-                                        break;
-                                    case 'not_equals':
-                                        isInvalid = myVal === triggerVal;
-                                        break;
-                                    case 'contains':
-                                        isInvalid = !myVal.includes(triggerVal);
-                                        break;
-                                    case 'greater_than':
-                                        isInvalid = Number(myVal) <= Number(triggerVal);
-                                        break;
-                                    case 'less_than':
-                                        isInvalid = Number(myVal) >= Number(triggerVal);
-                                        break;
-                                    // Reuse generic evaluator for others if applicable in future
+                                    case 'equals': isInvalid = myVal !== triggerVal; break;
+                                    case 'not_equals': isInvalid = myVal === triggerVal; break;
+                                    case 'contains': isInvalid = !myVal.includes(triggerVal); break;
+                                    case 'greater_than': isInvalid = Number(myVal) <= Number(triggerVal); break;
+                                    case 'less_than': isInvalid = Number(myVal) >= Number(triggerVal); break;
                                 }
                             }
                         }
                         validationMsg = el.validationLogic?.errorMessage || validationMsg;
                     }
                     
-                    if (isInvalid && (myVal !== '' || el.required)) {
+                    if (isInvalid && el.name) {
                         newErrors[el.name] = validationMsg;
                     }
                 }
@@ -183,12 +158,17 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLFormElement>) => {
       const target = e.target as unknown as HTMLInputElement;
       const { name, value, type, checked } = target;
-      
+      if (!name) return;
+
       let finalValue: any = value;
-      if (type === 'checkbox') finalValue = checked;
-      if (type === 'number' || type === 'range') finalValue = value === '' ? '' : Number(value);
-      // Handle multiple select
-      if (type === 'select-multiple') {
+      if (type === 'checkbox') {
+          finalValue = checked;
+      } else if (type === 'radio') {
+          if (!checked) return;
+          finalValue = value;
+      } else if (type === 'number' || type === 'range') {
+          finalValue = value === '' ? '' : Number(value);
+      } else if (type === 'select-multiple') {
           const select = target as unknown as HTMLSelectElement;
           finalValue = Array.from(select.selectedOptions).map(opt => opt.value);
       }
@@ -198,40 +178,30 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (Object.keys(errors).length === 0 && formRef.current?.reportValidity()) {
-        alert("Success! Form data is valid and accurate.");
-        console.log("Submitted Data:", formData);
+    if (Object.keys(errors).length === 0) {
+        alert("Form submitted successfully!\n" + JSON.stringify(formData, null, 2));
     } else {
-        alert("Please correct the errors in the form before submitting.");
+        alert("Validation Errors:\n" + Object.values(errors).join('\n'));
     }
   };
 
   const renderElements = (list: FormElement[]) => {
       return list.map(el => {
-          const isVisibleByPull = visibleElements.includes(el.id);
+          if (!el.id) return null;
           const override = dynamicOverrides[el.id] || {};
-          const isHiddenByPush = override.hidden === true;
-          const isShownByPush = override.hidden === false;
-          
-          let finalVisible = isVisibleByPull;
-          // Push logic (overrides) takes precedence for hiding
-          if (isHiddenByPush) finalVisible = false;
-          // Push logic takes precedence for showing (re-enabling visibility if it was hidden by Pull?)
-          if (isShownByPush) finalVisible = true;
+          let finalVisible = visibleElements.includes(el.id);
+          if (override.hidden === true) finalVisible = false;
+          if (override.hidden === false) finalVisible = true;
           
           if (!finalVisible) return null;
 
           return (
              <div key={el.id} className="relative w-full">
-                <FormElementRenderer 
-                    element={{ ...el, ...override }} 
-                    preview={true}
-                    error={errors[el.name] || null}
-                >
+                <FormElementRenderer element={{ ...el, ...override } as FormElement} preview={true}>
                     {el.children && renderElements(el.children)}
                 </FormElementRenderer>
-                {errors[el.name] && (
-                    <p id={`${el.name}-error`} role="alert" className="text-red-500 text-[10px] mt-0.5 font-bold animate-pulse px-1">
+                {el.name && errors[el.name] && (
+                    <p role="alert" className="text-red-500 text-[10px] mt-1.5 font-bold animate-fade-in-staggered px-1">
                         {errors[el.name]}
                     </p>
                 )}
@@ -241,23 +211,28 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="flex justify-between items-center p-4 border-b bg-brand-secondary">
-          <div className="flex items-center space-x-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-brand-primary" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-              <h2 className="text-xl font-bold text-brand-text">Interactive Preview</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-fade-in-staggered">
+        <div className="flex justify-between items-center p-6 border-b bg-brand-secondary/30">
+          <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-brand-primary rounded-2xl flex items-center justify-center text-white shadow-elevated">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-brand-text tracking-tight">Interactive Preview</h2>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Logic Simulator</p>
+              </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-800 transition-colors">
+          <button onClick={onClose} className="p-3 text-gray-400 hover:text-gray-900 transition-colors rounded-xl hover:bg-gray-100">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        <div className="p-6 overflow-y-auto flex-grow bg-white custom-scrollbar">
-            <form ref={formRef} onSubmit={handleSubmit} className="space-y-6" onChange={handleInputChange}>
+        <div className="p-10 overflow-y-auto flex-grow bg-white custom-scrollbar">
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-10" onChange={handleInputChange}>
                 {renderElements(elements)}
-                <div className="pt-4 border-t border-gray-100 flex justify-end">
-                    <button type="submit" className="px-8 py-3 bg-brand-primary text-white rounded-md font-bold hover:bg-brand-accent shadow-md transition-all active:scale-95">
-                        Submit and Verify
+                <div className="pt-8 border-t border-gray-100 flex justify-end">
+                    <button type="submit" className="px-12 py-4 bg-brand-primary text-white rounded-2xl font-black shadow-elevated hover:bg-brand-accent transition-all active:scale-95 text-sm uppercase tracking-wider">
+                        Submit and Test
                     </button>
                 </div>
             </form>
