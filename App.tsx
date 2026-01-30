@@ -196,7 +196,7 @@ const App: React.FC = () => {
                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             </button>
             <button onClick={() => setShowClearConfirm(true)} title="Clear Canvas" className="w-14 h-14 bg-red-50 rounded-2xl shadow-elevated flex items-center justify-center text-red-500 border border-red-100 hover:bg-red-100 transition-all active:scale-95">
-               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1v3M4 7h16" /></svg>
             </button>
           </div>
         </div>
@@ -217,7 +217,7 @@ const App: React.FC = () => {
       {/* Modals */}
       <ConfirmationDialog isOpen={showClearConfirm} onClose={() => setShowClearConfirm(false)} onConfirm={handleClearAll} title="Clear Everything?" message="This will permanently delete all form components. This action cannot be undone." confirmButtonText="Clear All" confirmButtonVariant="danger" />
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} onImport={(els) => setFormElements(prev => [...prev, ...els])} />}
-      {showCodeModal && <CodeModal code={JSON.stringify(formElements, null, 2)} onClose={() => setShowCodeModal(false)} />}
+      {showCodeModal && <CodeModal formElements={formElements} onClose={() => setShowCodeModal(false)} />}
       {showPreviewModal && <PreviewModal elements={formElements} onClose={() => setShowPreviewModal(false)} />}
     </div>
   );

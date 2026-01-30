@@ -13,7 +13,9 @@
     "react-dom": "^19.2.0",
     "react": "^19.2.0",
     "papaparse": "5.4.1",
-    "xlsx": "latest"
+    "xlsx": "latest",
+    "jszip": "3.10.1",
+    "file-saver": "2.0.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
