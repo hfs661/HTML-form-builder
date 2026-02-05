@@ -15,7 +15,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Initialize formData with defaultValue from elements
   useEffect(() => {
     const initialData: Record<string, any> = {};
     const extractDefaults = (list: FormElement[]) => {
@@ -71,7 +70,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
             list.forEach(el => {
                 let isVisible = !el.hidden;
                 
-                // Visibility Logic (Pull)
                 if (el.logic?.triggerId) {
                     const triggerEl = findElementById(elements, el.logic.triggerId);
                     if (triggerEl) {
@@ -84,7 +82,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                 if (isVisible && el.id) {
                     visible.push(el.id);
                     
-                    // Conditional Logic (Push - Bulk Actions)
                     if (el.conditionalRules) {
                         const myVal = formData[el.name || ''];
                         el.conditionalRules.forEach(rule => {
@@ -107,7 +104,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                         });
                     }
 
-                    // Validation Logic
                     let myVal = formData[el.name || '']?.toString() || '';
                     let isInvalid = false;
                     let validationMsg = "Invalid value";
@@ -195,14 +191,20 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
           
           if (!finalVisible) return null;
 
+          const errorText = el.name ? errors[el.name] : undefined;
+
           return (
              <div key={el.id} className="relative w-full">
-                <FormElementRenderer element={{ ...el, ...override } as FormElement} preview={true}>
+                <FormElementRenderer 
+                  element={{ ...el, ...override } as FormElement} 
+                  preview={true}
+                  errorMessage={errorText}
+                >
                     {el.children && renderElements(el.children)}
                 </FormElementRenderer>
-                {el.name && errors[el.name] && (
-                    <p role="alert" className="text-red-500 text-[10px] mt-1.5 font-bold animate-fade-in-staggered px-1">
-                        {errors[el.name]}
+                {el.name && errorText && (
+                    <p id={`${el.id}-error`} role="alert" className="text-red-500 text-[10px] mt-1.5 font-bold animate-fade-in-staggered px-1">
+                        {errorText}
                     </p>
                 )}
              </div>

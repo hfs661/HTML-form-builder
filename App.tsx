@@ -27,7 +27,6 @@ const App: React.FC = () => {
   const [suggestedElements, setSuggestedElements] = useState<Partial<FormElement>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   useEffect(() => {
     localStorage.setItem('formElements', JSON.stringify(formElements));
@@ -67,15 +66,20 @@ const App: React.FC = () => {
 
   const duplicateElement = useCallback((id: string) => {
     setFormElements(prev => {
+      const generateNewIds = (el: FormElement): FormElement => {
+        const newId = `${el.type}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        return {
+          ...el,
+          id: newId,
+          name: `${el.name}_copy`,
+          children: el.children ? el.children.map(generateNewIds) : undefined
+        };
+      };
+
       const findAndClone = (list: FormElement[]): FormElement[] => {
         const index = list.findIndex(el => el.id === id);
         if (index !== -1) {
-          const clone = { 
-            ...list[index], 
-            id: `${list[index].type}-${Date.now()}`, 
-            name: `${list[index].name}_copy`,
-            children: list[index].children?.map(c => ({...c, id: `${c.type}-${Date.now()}-${Math.random()}`}))
-          };
+          const clone = generateNewIds(list[index]);
           const newList = [...list];
           newList.splice(index + 1, 0, clone);
           return newList;
@@ -83,6 +87,76 @@ const App: React.FC = () => {
         return list.map(el => el.children ? { ...el, children: findAndClone(el.children) } : el);
       };
       return findAndClone(prev);
+    });
+  }, []);
+
+  const groupSelectedElements = useCallback(() => {
+    if (selectedIds.length < 2) return;
+
+    setFormElements(prev => {
+      let harvested: FormElement[] = [];
+      
+      const recursiveHarvest = (list: FormElement[]): FormElement[] => {
+        const remaining: FormElement[] = [];
+        list.forEach(item => {
+          if (selectedIds.includes(item.id || '')) {
+            harvested.push(item);
+          } else {
+            if (item.children) {
+              item.children = recursiveHarvest(item.children);
+            }
+            remaining.push(item);
+          }
+        });
+        return remaining;
+      };
+
+      const cleanTree = recursiveHarvest([...prev]);
+      
+      const newGroup: FormElement = {
+        id: `container-${Date.now()}`,
+        type: 'container',
+        label: 'New Group',
+        name: `group_${Date.now().toString(36)}`,
+        styles: { 
+          padding: '20px', 
+          backgroundColor: '#ffffff', 
+          borderWidth: '1px', 
+          borderStyle: 'dashed', 
+          borderColor: '#e5e7eb',
+          borderRadius: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        },
+        children: harvested
+      };
+
+      return [...cleanTree, newGroup];
+    });
+    
+    // Select the new group
+    setSelectedIds([`container-${Date.now()}`]);
+  }, [selectedIds]);
+
+  const applyStyleToChildren = useCallback((parentId: string, styles: ElementStyle) => {
+    setFormElements(prev => {
+      const syncStyles = (list: FormElement[]): FormElement[] => {
+        return list.map(el => {
+          if (el.id === parentId && el.children) {
+            return {
+              ...el,
+              children: el.children.map(child => ({
+                ...child,
+                styles: { ...child.styles, ...styles }
+              }))
+            };
+          }
+          if (el.children) return { ...el, children: syncStyles(el.children) };
+          return el;
+        });
+      };
+      return syncStyles(prev);
     });
   }, []);
 
@@ -96,6 +170,7 @@ const App: React.FC = () => {
       children: data.children || (['container', 'bootstrap-row', 'bootstrap-col', 'accordion'].includes(data.type) ? [] : undefined)
     };
     setFormElements(prev => [...prev, newEl]);
+    setSelectedIds([id]);
   };
 
   const selectedElement = useMemo(() => {
@@ -115,7 +190,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-white text-brand-text">
-      {/* Refined Header */}
       <header className="h-16 flex-none border-b border-gray-100 flex items-center justify-between px-8 z-40 bg-white shadow-soft">
         <div className="flex items-center space-x-4">
           <div className="w-10 h-10 bg-brand-primary rounded-xl flex items-center justify-center text-white font-black shadow-elevated">P</div>
@@ -146,7 +220,6 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* AI Assistant Bar */}
       {isAiAssistantOpen && (
         <div className="flex-none bg-gray-50 border-b border-gray-100 py-6 px-12 z-30 animate-fade-in-staggered">
           <div className="max-w-5xl mx-auto flex items-center space-x-6">
@@ -158,7 +231,7 @@ const App: React.FC = () => {
                 type="text" 
                 value={aiPrompt} 
                 onChange={(e) => setAiPrompt(e.target.value)} 
-                placeholder="What kind of form do you need? (e.g. 'Simple employee survey with rating and suggestions')" 
+                placeholder="What kind of form do you need?" 
                 className="block w-full pl-12 pr-4 py-3.5 bg-white border-2 border-transparent rounded-2xl focus:ring-4 focus:ring-brand-primary/10 focus:border-brand-primary transition-all text-sm outline-none shadow-soft font-medium" 
                 onKeyDown={(e) => e.key === 'Enter' && handleGetSuggestions()}
                />
@@ -174,14 +247,11 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Main Workspace */}
       <main className="flex-grow flex overflow-hidden">
-        {/* Left Side: Palette */}
         <div className="w-80 flex-none bg-white border-r border-gray-100">
           <Palette suggestedElements={suggestedElements} onClearSuggestions={() => setSuggestedElements([])} onAddElement={handleAddFromPalette} />
         </div>
 
-        {/* Center Side: Canvas */}
         <div className="flex-grow flex flex-col relative overflow-hidden bg-[#F0F2F5]">
           <Canvas 
             elements={formElements} 
@@ -201,7 +271,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Side: Properties */}
         <div className="w-96 flex-none bg-white">
           <PropertiesPanel 
             selectedElement={selectedElement} 
@@ -209,13 +278,14 @@ const App: React.FC = () => {
             updateElement={updateElement} 
             closePanel={() => setSelectedIds([])} 
             allElements={formElements} 
-            onDuplicate={duplicateElement} 
+            onDuplicate={duplicateElement}
+            onGroup={groupSelectedElements}
+            onApplyStyleToChildren={applyStyleToChildren}
           />
         </div>
       </main>
 
-      {/* Modals */}
-      <ConfirmationDialog isOpen={showClearConfirm} onClose={() => setShowClearConfirm(false)} onConfirm={handleClearAll} title="Clear Everything?" message="This will permanently delete all form components. This action cannot be undone." confirmButtonText="Clear All" confirmButtonVariant="danger" />
+      <ConfirmationDialog isOpen={showClearConfirm} onClose={() => setShowClearConfirm(false)} onConfirm={handleClearAll} title="Clear Everything?" message="This will permanently delete all form components." confirmButtonText="Clear All" confirmButtonVariant="danger" />
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} onImport={(els) => setFormElements(prev => [...prev, ...els])} />}
       {showCodeModal && <CodeModal formElements={formElements} onClose={() => setShowCodeModal(false)} />}
       {showPreviewModal && <PreviewModal elements={formElements} onClose={() => setShowPreviewModal(false)} />}

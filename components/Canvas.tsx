@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
-import type { FormElement, FormElementType } from '../types';
+import React, { useState } from 'react';
+import type { FormElement } from '../types';
 import FormElementRenderer from './FormElementRenderer';
 
 interface CanvasProps {
   elements: FormElement[];
   setElements: (newElements: FormElement[] | ((prev: FormElement[]) => FormElement[])) => void;
-  setSelectedIds: (ids: string[]) => void;
+  setSelectedIds: (ids: string[] | ((prev: string[]) => string[])) => void;
   selectedIds: string[];
   updateElement: (id: string, updatedProps: Partial<FormElement>) => void;
 }
@@ -55,7 +55,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     return {
       ...el,
       id: newId,
-      name: `${el.type}_${Math.random().toString(36).substring(2, 5)}_${Date.now().toString(36).slice(-3)}`,
+      name: `${el.name}_${Math.random().toString(36).substring(2, 5)}`,
       children: el.children ? el.children.map(generateNewIds) : undefined
     };
   };
@@ -65,6 +65,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
     e.stopPropagation();
     setIsDragging(false);
 
+    const isCopy = e.ctrlKey || e.metaKey;
     const target = dragOverTarget;
     setDragOverTarget(null);
 
@@ -85,14 +86,15 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
       if (draggedItem.id) {
         const found = findNodeAndParent(prev, draggedItem.id);
         if (!found) return prev;
-        finalItem = found.node;
-        workingTree = recursiveDelete(prev, draggedItem.id);
-      } else {
-        if (draggedItem.isSnippet) {
-          // Flatten snippet elements or handle specifically if needed
-          // For now, snippets should already be formatted correctly
-          return prev; 
+        
+        if (isCopy) {
+          finalItem = generateNewIds(found.node);
+          // Keep the original in the tree
+        } else {
+          finalItem = found.node;
+          workingTree = recursiveDelete(prev, draggedItem.id);
         }
+      } else {
         finalItem = generateNewIds(draggedItem);
       }
 
@@ -123,8 +125,8 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
 
   const RecursiveList = ({ items, parentId }: { items: FormElement[]; parentId: string | null }) => {
     return (
-      <div className={`w-full flex flex-col space-y-4 transition-all duration-300 ${items.length === 0 ? 'min-h-[60px] border-2 border-dashed border-gray-100 rounded-2xl flex items-center justify-center text-[10px] text-gray-300 font-bold uppercase tracking-widest' : ''}`}>
-        {items.length === 0 && parentId && 'Empty Section'}
+      <div className={`w-full flex flex-col space-y-4 transition-all duration-300 ${items.length === 0 && parentId ? 'min-h-[80px] border-2 border-dashed border-gray-100 rounded-2xl flex items-center justify-center text-[10px] text-gray-300 font-bold uppercase tracking-widest' : ''}`}>
+        {items.length === 0 && parentId && <div className="pointer-events-none opacity-40">Drop items here</div>}
         {items.map((el, idx) => {
           const isSelected = !!el.id && selectedIds.includes(el.id);
           const isDropTarget = dragOverTarget?.parentId === parentId && dragOverTarget?.index === idx;
@@ -140,10 +142,19 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                 </div>
               )}
               <div 
-                onClick={(e) => { e.stopPropagation(); if (el.id) setSelectedIds([el.id]); }}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (el.id) {
+                    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                      setSelectedIds(prev => prev.includes(el.id!) ? prev.filter(id => id !== el.id) : [...prev, el.id!]);
+                    } else {
+                      setSelectedIds([el.id]);
+                    }
+                  } 
+                }}
                 onDragOver={(e) => handleDragOverElement(e, el, parentId, idx)}
                 className={`relative rounded-2xl transition-all duration-500 group
-                  ${isSelected ? 'ring-2 ring-brand-primary shadow-elevated z-10 bg-white scale-[1.02]' : 'hover:ring-1 hover:ring-gray-300 scale-100'}
+                  ${isSelected ? 'ring-2 ring-brand-primary shadow-elevated z-10 bg-white scale-[1.01]' : 'hover:ring-1 hover:ring-gray-300 scale-100'}
                   ${isBeingDroppedInside ? 'ring-4 ring-brand-primary/30 bg-brand-primary/10 shadow-inner' : ''}`}
               >
                 <FormElementRenderer element={el} preview={false}>
@@ -151,12 +162,14 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
                 </FormElementRenderer>
                 
                 {isSelected && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); if (el.id) { setElements(prev => recursiveDelete(prev, el.id!)); setSelectedIds([]); } }}
-                    className="absolute -top-3 -right-3 w-8 h-8 bg-red-500 text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-red-600 transition-all z-20 scale-0 group-hover:scale-100 origin-center duration-300"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                  </button>
+                  <div className="absolute -top-3 -right-3 flex space-x-1 z-20 scale-0 group-hover:scale-100 origin-center duration-300">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); if (el.id) { setElements(prev => recursiveDelete(prev, el.id!)); setSelectedIds([]); } }}
+                      className="w-8 h-8 bg-red-500 text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-red-600 transition-all"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                    </button>
+                  </div>
                 )}
               </div>
               {isLastDropTarget && (
@@ -188,7 +201,7 @@ const Canvas: React.FC<CanvasProps> = ({ elements, setElements, setSelectedIds, 
               </svg>
             </div>
             <h3 className="text-3xl font-black text-gray-900 mb-4 tracking-tight">Interactive Designer</h3>
-            <p className="max-w-md text-base font-semibold text-gray-400 leading-relaxed px-4">Start your design journey by dragging elements from the library. Watch as the form adapts in real-time.</p>
+            <p className="max-w-md text-base font-semibold text-gray-400 leading-relaxed px-4">Drag elements here. Hold <kbd className="bg-gray-100 px-1 border rounded text-[10px]">Ctrl</kbd> to duplicate while dragging.</p>
           </div>
         ) : (
           <RecursiveList items={elements} parentId={null} />

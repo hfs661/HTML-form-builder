@@ -10,6 +10,7 @@ interface FormElementRendererProps {
   onUpdate?: (id: string, updatedProps: Partial<FormElement>) => void;
   preview?: boolean;
   children?: React.ReactNode;
+  errorMessage?: string; // Added to support aria-describedby
 }
 
 const sizeClasses: Record<string, string> = {
@@ -18,7 +19,7 @@ const sizeClasses: Record<string, string> = {
   large: 'px-4 py-3 text-base',
 };
 
-const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStopEditing, onUpdate, preview = false, children }) => {
+const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStopEditing, onUpdate, preview = false, children, errorMessage }) => {
   const { 
     id = '', 
     type, 
@@ -34,6 +35,9 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     headingLevel, 
     multiple, 
     ariaLabel, 
+    ariaRole,
+    ariaLive,
+    ariaDescribedBy,
     testId,
     defaultValue,
     colSpan
@@ -58,7 +62,6 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     width: styles?.width,
     height: styles?.height,
     padding: styles?.padding,
-    /* Applying margin styles including side-specific values if defined */
     margin: styles?.margin,
     marginTop: styles?.marginTop,
     marginBottom: styles?.marginBottom,
@@ -67,7 +70,6 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     borderRadius: styles?.borderRadius,
     borderColor: styles?.borderColor,
     borderWidth: styles?.borderWidth,
-    /* Applying side-specific border width styles */
     borderTopWidth: styles?.borderTopWidth,
     borderRightWidth: styles?.borderRightWidth,
     borderBottomWidth: styles?.borderBottomWidth,
@@ -90,9 +92,9 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
   const inputBaseClasses = `w-full border border-gray-200 rounded-lg outline-none transition-all shadow-sm ${preview ? 'focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary' : 'pointer-events-none'} ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white'}`;
 
-  const renderLabel = () => (
+  const renderLabel = (targetId?: string) => (
     <div className="mb-1.5 flex items-center justify-between">
-      <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+      <label htmlFor={targetId} className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
         {isEditing ? (
           <input 
             autoFocus 
@@ -107,22 +109,28 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     </div>
   );
 
+  const errorId = `${id}-error`;
   const commonProps = {
     'aria-label': ariaLabel || label,
+    'aria-required': isRequired,
+    'aria-invalid': !!errorMessage,
+    'aria-describedby': errorMessage ? `${errorId} ${ariaDescribedBy || ''}`.trim() : ariaDescribedBy,
+    'role': ariaRole,
+    'aria-live': ariaLive,
     'data-testid': testId,
   };
 
   switch (type) {
     case 'bootstrap-row':
       return (
-        <div 
+        <section 
           className={`w-full relative flex flex-wrap transition-all duration-300 ${preview ? '' : 'p-4 border border-dashed border-blue-200 rounded-xl bg-blue-50/10 mb-4'}`} 
           style={{ ...appearanceStyle, display: 'flex' }}
           {...commonProps}
         >
            {!preview && <span className="text-[10px] font-black text-blue-300 uppercase absolute top-1 left-3 select-none pointer-events-none">Row</span>}
            {children}
-        </div>
+        </section>
       );
 
     case 'bootstrap-col':
@@ -139,7 +147,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
     case 'container':
       return (
-        <div className={`w-full relative transition-all duration-300 ${preview ? '' : 'p-6 border border-dashed border-gray-200 rounded-xl bg-gray-50/10'}`} style={appearanceStyle} {...commonProps}>
+        <div 
+          role={ariaRole || 'region'} 
+          className={`w-full relative transition-all duration-300 ${preview ? '' : 'p-6 border border-dashed border-gray-200 rounded-xl bg-gray-50/10'}`} 
+          style={appearanceStyle} 
+          {...commonProps}
+        >
            {!preview && <span className="text-[10px] font-bold text-gray-300 uppercase absolute top-2 left-4 select-none pointer-events-none">{type}</span>}
            {children}
         </div>
@@ -153,6 +166,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             onClick={() => setIsAccordionOpen(!isAccordionOpen)}
             className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-100 transition-colors text-sm font-bold text-gray-700 outline-none"
             aria-expanded={isAccordionOpen}
+            aria-controls={`${id}-content`}
           >
             <div className="flex items-center">
               <span className={`w-2 h-2 rounded-full mr-3 ${isAccordionOpen ? 'bg-brand-primary' : 'bg-gray-300'}`}></span>
@@ -162,7 +176,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
               <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
           </button>
-          <div className={`transition-all duration-300 ease-in-out ${isAccordionOpen ? 'max-h-[2000px] opacity-100 p-4 border-t border-gray-100' : 'max-h-0 opacity-0 overflow-hidden p-0'}`}>
+          <div id={`${id}-content`} role="region" className={`transition-all duration-300 ease-in-out ${isAccordionOpen ? 'max-h-[2000px] opacity-100 p-4 border-t border-gray-100' : 'max-h-0 opacity-0 overflow-hidden p-0'}`}>
             {children}
           </div>
         </div>
@@ -181,10 +195,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'text':
     case 'date':
     case 'number':
+      const inputId = `${id}-input`;
       return (
         <div className="w-full" style={appearanceStyle}>
-          {renderLabel()}
+          {renderLabel(inputId)}
           <input 
+            id={inputId}
             type={type} 
             name={name} 
             placeholder={placeholder} 
@@ -198,10 +214,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       );
 
     case 'textarea':
+      const textareaId = `${id}-textarea`;
       return (
         <div className="w-full" style={appearanceStyle}>
-          {renderLabel()}
+          {renderLabel(textareaId)}
           <textarea 
+            id={textareaId}
             name={name} 
             placeholder={placeholder} 
             disabled={disabled} 
@@ -215,10 +233,12 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       );
 
     case 'select':
+      const selectId = `${id}-select`;
       return (
         <div className="w-full" style={appearanceStyle}>
-          {renderLabel()}
+          {renderLabel(selectId)}
           <select 
+            id={selectId}
             name={name} 
             disabled={disabled} 
             multiple={multiple} 

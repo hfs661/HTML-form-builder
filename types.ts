@@ -29,7 +29,6 @@ export interface ElementStyle {
   textColor?: string;
   borderColor?: string;
   borderWidth?: string;
-  /* Support for specific border sides */
   borderTopWidth?: string;
   borderRightWidth?: string;
   borderBottomWidth?: string;
@@ -131,6 +130,9 @@ export interface FormElement {
   colSpan?: number; // 1 to 12
   // Accessibility & Custom Attributes
   ariaLabel?: string;
+  ariaRole?: string;
+  ariaLive?: 'off' | 'polite' | 'assertive';
+  ariaDescribedBy?: string;
   testId?: string;
 }
 
