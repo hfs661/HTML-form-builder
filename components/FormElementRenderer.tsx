@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { FormElement } from '../types';
 
@@ -10,7 +9,7 @@ interface FormElementRendererProps {
   onUpdate?: (id: string, updatedProps: Partial<FormElement>) => void;
   preview?: boolean;
   children?: React.ReactNode;
-  errorMessage?: string; // Added to support aria-describedby
+  errorMessage?: string;
 }
 
 const sizeClasses: Record<string, string> = {
@@ -51,9 +50,8 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const orientation = styles?.orientation || 'vertical';
 
   const calculateColBasis = (span?: number) => {
-    if (!span) return undefined;
-    const percentage = (span / 12) * 100;
-    return `${percentage}%`;
+    if (!span) return '100%';
+    return `${(span / 12) * 100}%`;
   };
 
   const appearanceStyle: React.CSSProperties = {
@@ -85,12 +83,14 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     justifyContent: styles?.justifyContent,
     alignItems: styles?.alignItems,
     flexWrap: styles?.flexWrap,
-    flexBasis: styles?.flexBasis || calculateColBasis(colSpan),
-    flexGrow: styles?.flexGrow,
+    flexBasis: styles?.flexBasis || (type === 'bootstrap-col' ? calculateColBasis(colSpan) : undefined),
+    flexGrow: styles?.flexGrow ?? (type === 'bootstrap-col' ? 0 : undefined),
+    flexShrink: styles?.flexShrink ?? (type === 'bootstrap-col' ? 0 : undefined),
+    maxWidth: styles?.maxWidth || (type === 'bootstrap-col' ? calculateColBasis(colSpan) : undefined),
     gridTemplateColumns: styles?.gridTemplateColumns,
   };
 
-  const inputBaseClasses = `w-full border border-gray-200 rounded-lg outline-none transition-all shadow-sm ${preview ? 'focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary' : 'pointer-events-none'} ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white'}`;
+  const inputBaseClasses = `w-full border border-gray-200 rounded-lg outline-none transition-all shadow-sm ${preview ? 'focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary' : 'pointer-events-none'} ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white'}`;
 
   const renderLabel = (targetId?: string) => (
     <div className="mb-1.5 flex items-center justify-between">
@@ -102,6 +102,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             value={label} 
             onChange={e => onUpdate?.(id, { label: e.target.value })} 
             onBlur={onStopEditing}
+            aria-label="Edit label"
           />
         ) : label}
         {isRequired && <span className="text-red-500 ml-1" aria-hidden="true">*</span>}
@@ -124,11 +125,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'bootstrap-row':
       return (
         <section 
-          className={`w-full relative flex flex-wrap transition-all duration-300 ${preview ? '' : 'p-4 border border-dashed border-blue-200 rounded-xl bg-blue-50/10 mb-4'}`} 
-          style={{ ...appearanceStyle, display: 'flex' }}
+          className={`w-full relative flex flex-wrap transition-all duration-300 ${preview ? '' : 'p-2 border border-dashed border-blue-200 rounded-xl bg-blue-50/5 mb-4'}`} 
+          style={{ ...appearanceStyle, display: 'flex', flexWrap: 'wrap' }}
           {...commonProps}
         >
-           {!preview && <span className="text-[10px] font-black text-blue-300 uppercase absolute top-1 left-3 select-none pointer-events-none">Row</span>}
+           {!preview && <span className="text-[9px] font-black text-blue-400/50 uppercase absolute top-0 left-2 select-none pointer-events-none z-0">Bootstrap Row</span>}
            {children}
         </section>
       );
@@ -136,11 +137,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     case 'bootstrap-col':
       return (
         <div 
-          className={`relative transition-all duration-300 ${preview ? '' : 'p-4 border border-dashed border-gray-200 rounded-xl hover:border-brand-primary/40'}`} 
-          style={{ ...appearanceStyle, minHeight: !preview ? '60px' : undefined }}
+          className={`relative transition-all duration-300 ${preview ? '' : 'p-2 border border-dotted border-gray-300 rounded-lg hover:bg-gray-50/50'}`} 
+          style={{ ...appearanceStyle, minHeight: !preview ? '40px' : undefined }}
           {...commonProps}
         >
-           {!preview && <span className="text-[10px] font-black text-gray-300 uppercase absolute top-1 left-3 select-none pointer-events-none">Col {colSpan ? `(${colSpan}/12)` : ''}</span>}
+           {!preview && <span className="text-[8px] font-bold text-gray-300 uppercase absolute top-0 left-1 select-none pointer-events-none">{colSpan || 12}/12</span>}
            {children}
         </div>
       );
@@ -164,7 +165,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
           <button 
             type="button"
             onClick={() => setIsAccordionOpen(!isAccordionOpen)}
-            className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-100 transition-colors text-sm font-bold text-gray-700 outline-none"
+            className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-100 transition-colors text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary"
             aria-expanded={isAccordionOpen}
             aria-controls={`${id}-content`}
           >
@@ -188,6 +189,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         h1: 'text-4xl font-extrabold mb-4 tracking-tight',
         h2: 'text-3xl font-bold mb-3 tracking-tight',
         h3: 'text-2xl font-bold mb-2',
+        h4: 'text-xl font-bold mb-2',
         p: 'text-base text-gray-600 leading-relaxed',
       };
       return <div className="w-full" style={appearanceStyle} {...commonProps}><Tag className={tagStyles[Tag] || tagStyles.p}>{textContent || 'Type something here...'}</Tag></div>;
@@ -257,7 +259,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       return (
         <button 
           type={type === 'reset-button' ? 'reset' : 'button'} 
-          className={`font-bold rounded-lg shadow-sm transition-all active:scale-95 ${sizeClass} ${type === 'button' ? 'bg-brand-primary text-white hover:bg-brand-accent' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`} 
+          className={`font-bold rounded-lg shadow-sm transition-all active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${type === 'button' ? 'bg-brand-primary text-white hover:bg-brand-accent' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`} 
           style={appearanceStyle} 
           {...commonProps}
         >
@@ -283,8 +285,8 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
     case 'radio':
       return (
-        <div className="w-full" style={appearanceStyle} role="radiogroup" aria-labelledby={`${id}-label`}>
-          <div id={`${id}-label`}>{renderLabel()}</div>
+        <fieldset className="w-full border-none p-0 m-0" style={appearanceStyle} {...commonProps}>
+          <legend className="mb-1.5 block text-[11px] font-bold text-gray-600 uppercase tracking-wider">{label}</legend>
           <div className={`mt-2 flex ${orientation === 'vertical' ? 'flex-col space-y-3' : 'flex-row flex-wrap gap-6'}`}>
             {options?.map((opt, i) => (
               <div key={i} className="flex items-center cursor-pointer group">
@@ -296,7 +298,6 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                   value={opt}
                   defaultChecked={defaultValue === opt}
                   className={`appearance-none w-5 h-5 border-2 border-gray-200 rounded-full checked:border-brand-primary checked:border-[6px] transition-all cursor-pointer ${preview ? '' : 'pointer-events-none'} focus:ring-2 focus:ring-brand-primary/20 focus:ring-offset-2`} 
-                  {...commonProps}
                 />
                 <label 
                   htmlFor={`${id}-${i}`} 
@@ -307,18 +308,18 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
               </div>
             ))}
           </div>
-        </div>
+        </fieldset>
       );
 
     case 'image':
-      return <img src={src || 'https://images.unsplash.com/photo-1481487196290-c152efe083f5?auto=format&fit=crop&q=80&w=800'} className="w-full h-auto rounded-xl object-cover shadow-panel border border-gray-100 transition-all duration-300" style={appearanceStyle} alt={label} {...commonProps} />;
+      return <img src={src || 'https://images.unsplash.com/photo-1481487196290-c152efe083f5?auto=format&fit=crop&q=80&w=800'} className="w-full h-auto rounded-xl object-cover shadow-panel border border-gray-100 transition-all duration-300" style={appearanceStyle} alt={ariaLabel || label} {...commonProps} />;
 
     case 'divider':
-      return <hr className="border-t border-gray-200 my-4 transition-all duration-300" style={appearanceStyle} {...commonProps} />;
+      return <hr className="border-t border-gray-200 my-4 transition-all duration-300" style={appearanceStyle} role="presentation" {...commonProps} />;
 
     case 'progress':
       return (
-        <div className="w-full" style={appearanceStyle} {...commonProps}>
+        <div className="w-full" style={appearanceStyle} {...commonProps} role="progressbar" aria-valuenow={45} aria-valuemin={0} aria-valuemax={100}>
           {renderLabel()}
           <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
             <div className="h-full bg-brand-primary transition-all duration-500" style={{ width: '45%' }}></div>

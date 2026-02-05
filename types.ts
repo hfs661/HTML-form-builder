@@ -1,4 +1,3 @@
-
 import type { ReactElement } from 'react';
 
 export type FormElementType = 
@@ -44,8 +43,8 @@ export interface ElementStyle {
   gap?: string;
   rowGap?: string;
   columnGap?: string;
-  flexGrow?: string;
-  flexShrink?: string;
+  flexGrow?: string | number;
+  flexShrink?: string | number;
   flexBasis?: string;
   flexWrap?: 'nowrap' | 'wrap' | 'wrap-reverse';
   gridTemplateColumns?: string;

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { PaletteItem, SnippetItem } from './types';
 
@@ -187,15 +186,15 @@ export const BOOTSTRAP_GRID_SNIPPETS: SnippetItem[] = [
         elements: [{
             type: 'bootstrap-row',
             label: 'Two Column Row',
-            styles: { flexWrap: 'wrap', gap: '20px' },
+            styles: { flexWrap: 'wrap', gap: '0px' },
             children: [
-                { type: 'bootstrap-col', label: 'Col Left', colSpan: 6, styles: { padding: '16px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1', backgroundColor: '#f8fafc' } },
-                { type: 'bootstrap-col', label: 'Col Right', colSpan: 6, styles: { padding: '16px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1', backgroundColor: '#f8fafc' } }
+                { type: 'bootstrap-col', label: 'Col Left', colSpan: 6, styles: { padding: '16px', backgroundColor: '#f9fafb' } },
+                { type: 'bootstrap-col', label: 'Col Right', colSpan: 6, styles: { padding: '16px', backgroundColor: '#ffffff' } }
             ]
         }]
     },
     {
-        label: 'Sidebar Layout (4+8)',
+        label: 'Sidebar Layout (3+9)',
         icon: (
              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M2 5a1 1 0 011-1h14a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V5zm5 1H4v8h3V6zm1 0v8h8V6H8z" />
@@ -206,9 +205,8 @@ export const BOOTSTRAP_GRID_SNIPPETS: SnippetItem[] = [
             label: 'Sidebar Row',
             styles: { flexWrap: 'wrap', gap: '0px' },
             children: [
-                /* Resolved: Added borderStyle to ensure borderRightWidth is visible */
-                { type: 'bootstrap-col', label: 'Sidebar', colSpan: 4, styles: { padding: '20px', borderRightWidth: '1px', borderStyle: 'solid', borderColor: '#e2e8f0', minHeight: '120px' } },
-                { type: 'bootstrap-col', label: 'Main Content', colSpan: 8, styles: { padding: '20px', minHeight: '120px' } }
+                { type: 'bootstrap-col', label: 'Sidebar', colSpan: 3, styles: { padding: '20px', backgroundColor: '#f8fafc', borderRightWidth: '1px', borderStyle: 'solid', borderColor: '#e2e8f0', minHeight: '120px' } },
+                { type: 'bootstrap-col', label: 'Main Content', colSpan: 9, styles: { padding: '20px', minHeight: '120px' } }
             ]
         }]
     },
@@ -222,11 +220,11 @@ export const BOOTSTRAP_GRID_SNIPPETS: SnippetItem[] = [
         elements: [{
             type: 'bootstrap-row',
             label: 'Three Column Row',
-            styles: { flexWrap: 'wrap', gap: '15px' },
+            styles: { flexWrap: 'wrap', gap: '0px' },
             children: [
-                { type: 'bootstrap-col', label: 'Col 1', colSpan: 4, styles: { padding: '12px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Col 2', colSpan: 4, styles: { padding: '12px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } },
-                { type: 'bootstrap-col', label: 'Col 3', colSpan: 4, styles: { padding: '12px', borderStyle: 'dashed', borderWidth: '1px', borderColor: '#cbd5e1' } }
+                { type: 'bootstrap-col', label: 'Col 1', colSpan: 4, styles: { padding: '12px', borderRightWidth: '1px', borderStyle: 'dotted', borderColor: '#e2e8f0' } },
+                { type: 'bootstrap-col', label: 'Col 2', colSpan: 4, styles: { padding: '12px', borderRightWidth: '1px', borderStyle: 'dotted', borderColor: '#e2e8f0' } },
+                { type: 'bootstrap-col', label: 'Col 3', colSpan: 4, styles: { padding: '12px' } }
             ]
         }]
     }
@@ -239,13 +237,13 @@ export const WEBSITE_SNIPPETS: SnippetItem[] = [
             {
                 type: 'container',
                 label: 'Hero',
-                styles: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', backgroundColor: '#f9fafb', textAlign: 'center' },
+                styles: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', backgroundColor: '#f9fafb', textAlign: 'center' },
                 children: [
-                    { type: 'typography', headingLevel: 'h1', textContent: 'Welcome to Our Service', styles: { fontSize: '48px', fontWeight: '800', marginBottom: '20px', textColor: '#111827' }, name: 'hero_title' },
-                    { type: 'typography', headingLevel: 'p', textContent: 'We provide the best solutions for your business needs. Join us today and start your journey.', styles: { fontSize: '18px', textColor: '#6b7280', maxWidth: '600px', marginBottom: '30px' }, name: 'hero_desc' },
-                    { type: 'container', label: 'Buttons', styles: { display: 'flex', gap: '15px' }, children: [
-                        { type: 'button', label: 'Get Started', styles: { backgroundColor: '#2563eb', textColor: '#ffffff', padding: '12px 24px', borderRadius: '8px' }, name: 'btn_start' },
-                        { type: 'button', label: 'Learn More', styles: { backgroundColor: '#ffffff', textColor: '#374151', padding: '12px 24px', borderRadius: '8px', borderWidth: '1px', borderColor: '#d1d5db' }, name: 'btn_learn' }
+                    { type: 'typography', headingLevel: 'h1', textContent: 'Modern Solutions', styles: { fontSize: '42px', fontWeight: '800', marginBottom: '16px', textColor: '#1e293b' }, name: 'hero_title' },
+                    { type: 'typography', headingLevel: 'p', textContent: 'Design and build professional forms in minutes with AI-assisted intelligence and visual drag-and-drop tools.', styles: { fontSize: '18px', textColor: '#64748b', maxWidth: '650px', marginBottom: '32px' }, name: 'hero_desc' },
+                    { type: 'container', label: 'CTA Group', styles: { display: 'flex', gap: '12px' }, children: [
+                        { type: 'button', label: 'Get Started', styles: { backgroundColor: '#0078d4', textColor: '#ffffff', padding: '12px 32px', borderRadius: '12px' }, name: 'btn_start' },
+                        { type: 'button', label: 'Watch Demo', styles: { backgroundColor: '#ffffff', textColor: '#475569', padding: '12px 32px', borderRadius: '12px', borderWidth: '1px', borderColor: '#e2e8f0' }, name: 'btn_demo' }
                     ]}
                 ]
             }
