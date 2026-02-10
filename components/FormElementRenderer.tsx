@@ -13,9 +13,9 @@ interface FormElementRendererProps {
 }
 
 const sizeClasses: Record<string, string> = {
-  small: 'px-2 py-1.5 text-[11px]',
-  medium: 'px-3 py-2 text-sm',
-  large: 'px-4 py-3 text-base',
+  small: 'px-3 py-2 text-[12px]',
+  medium: 'px-4 py-3 text-sm',
+  large: 'px-5 py-4 text-base',
 };
 
 const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEditing, onStopEditing, onUpdate, preview = false, children, errorMessage }) => {
@@ -29,6 +29,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     name = '', 
     styles, 
     disabled, 
+    hidden,
     src, 
     textContent, 
     headingLevel, 
@@ -47,11 +48,30 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
   const isRequired = !!required;
   const currentSize = styles?.size || 'medium';
   const sizeClass = sizeClasses[currentSize];
-  const orientation = styles?.orientation || 'vertical';
+  
+  // Base styling for consistency across all standard inputs
+  const inputBaseClasses = `
+    w-full 
+    border border-gray-200 
+    rounded-xl 
+    outline-none 
+    transition-all 
+    duration-200
+    shadow-sm
+    ${preview ? 'focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary focus:shadow-md' : 'pointer-events-none'} 
+    ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700'}
+    ${errorMessage ? 'border-red-500 bg-red-50/30 ring-red-500/10' : ''}
+  `.trim().replace(/\s+/g, ' ');
 
-  const calculateColBasis = (span?: number) => {
-    if (!span) return '100%';
-    return `${(span / 12) * 100}%`;
+  // Common accessibility props
+  const commonProps = {
+    'aria-label': ariaLabel || label,
+    'aria-required': isRequired,
+    'aria-invalid': !!errorMessage,
+    'aria-describedby': errorMessage ? `${id}-error ${ariaDescribedBy || ''}`.trim() : ariaDescribedBy,
+    'role': ariaRole,
+    'aria-live': ariaLive,
+    'data-testid': testId,
   };
 
   const appearanceStyle: React.CSSProperties = {
@@ -61,65 +81,50 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
     height: styles?.height,
     padding: styles?.padding,
     margin: styles?.margin,
-    marginTop: styles?.marginTop,
-    marginBottom: styles?.marginBottom,
-    marginLeft: styles?.marginLeft,
-    marginRight: styles?.marginRight,
     borderRadius: styles?.borderRadius,
     borderColor: styles?.borderColor,
     borderWidth: styles?.borderWidth,
-    borderTopWidth: styles?.borderTopWidth,
-    borderRightWidth: styles?.borderRightWidth,
-    borderBottomWidth: styles?.borderBottomWidth,
-    borderLeftWidth: styles?.borderLeftWidth,
     borderStyle: styles?.borderStyle,
     textAlign: styles?.textAlign,
-    zIndex: styles?.zIndex,
     display: styles?.display,
     flexDirection: styles?.flexDirection,
     gap: styles?.gap,
-    rowGap: styles?.rowGap,
-    columnGap: styles?.columnGap,
     justifyContent: styles?.justifyContent,
     alignItems: styles?.alignItems,
-    flexWrap: styles?.flexWrap,
-    flexBasis: styles?.flexBasis || (type === 'bootstrap-col' ? calculateColBasis(colSpan) : undefined),
+    flexBasis: styles?.flexBasis || (type === 'bootstrap-col' ? `${(colSpan || 12) / 12 * 100}%` : undefined),
     flexGrow: styles?.flexGrow ?? (type === 'bootstrap-col' ? 0 : undefined),
-    flexShrink: styles?.flexShrink ?? (type === 'bootstrap-col' ? 0 : undefined),
-    maxWidth: styles?.maxWidth || (type === 'bootstrap-col' ? calculateColBasis(colSpan) : undefined),
-    gridTemplateColumns: styles?.gridTemplateColumns,
+    maxWidth: styles?.maxWidth || (type === 'bootstrap-col' ? `${(colSpan || 12) / 12 * 100}%` : undefined),
+    opacity: (hidden && !preview) ? 0.4 : 1,
   };
 
-  const inputBaseClasses = `w-full border border-gray-200 rounded-lg outline-none transition-all shadow-sm ${preview ? 'focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary' : 'pointer-events-none'} ${disabled ? 'bg-gray-100 text-gray-400' : 'bg-white'}`;
+  if (hidden && preview) return null;
 
   const renderLabel = (targetId?: string) => (
-    <div className="mb-1.5 flex items-center justify-between">
-      <label htmlFor={targetId} className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider">
+    <div className="mb-2 flex items-center justify-between">
+      <label 
+        htmlFor={targetId} 
+        id={`${id}-label`}
+        className={`block text-[11px] font-bold uppercase tracking-widest ${errorMessage ? 'text-red-600' : 'text-gray-500'}`}
+      >
         {isEditing ? (
           <input 
             autoFocus 
-            className="border-b-2 border-brand-primary outline-none bg-transparent" 
+            className="border-b-2 border-brand-primary outline-none bg-transparent w-full" 
             value={label} 
             onChange={e => onUpdate?.(id, { label: e.target.value })} 
             onBlur={onStopEditing}
-            aria-label="Edit label"
+            aria-label="Edit label text"
           />
-        ) : label}
+        ) : label || (preview ? '' : '(No Label)')}
         {isRequired && <span className="text-red-500 ml-1" aria-hidden="true">*</span>}
       </label>
+      {hidden && !preview && (
+        <span className="text-[9px] font-black text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 uppercase tracking-tighter">
+          Hidden by Default
+        </span>
+      )}
     </div>
   );
-
-  const errorId = `${id}-error`;
-  const commonProps = {
-    'aria-label': ariaLabel || label,
-    'aria-required': isRequired,
-    'aria-invalid': !!errorMessage,
-    'aria-describedby': errorMessage ? `${errorId} ${ariaDescribedBy || ''}`.trim() : ariaDescribedBy,
-    'role': ariaRole,
-    'aria-live': ariaLive,
-    'data-testid': testId,
-  };
 
   switch (type) {
     case 'bootstrap-row':
@@ -150,49 +155,40 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       return (
         <div 
           role={ariaRole || 'region'} 
+          aria-labelledby={label ? `${id}-label` : undefined}
           className={`w-full relative transition-all duration-300 ${preview ? '' : 'p-6 border border-dashed border-gray-200 rounded-xl bg-gray-50/10'}`} 
           style={appearanceStyle} 
           {...commonProps}
         >
-           {!preview && <span className="text-[10px] font-bold text-gray-300 uppercase absolute top-2 left-4 select-none pointer-events-none">{type}</span>}
+           {!preview && label && renderLabel()}
+           {!preview && !label && <span className="text-[10px] font-bold text-gray-300 uppercase absolute top-2 left-4 select-none pointer-events-none">{type}</span>}
            {children}
         </div>
       );
 
     case 'accordion':
       return (
-        <div className={`w-full border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white mb-4 transition-all duration-300`} style={appearanceStyle} {...commonProps}>
+        <div className={`w-full border border-gray-200 rounded-2xl overflow-hidden shadow-sm bg-white mb-4 transition-all duration-300`} style={appearanceStyle} {...commonProps}>
           <button 
             type="button"
             onClick={() => setIsAccordionOpen(!isAccordionOpen)}
-            className="w-full flex items-center justify-between p-4 bg-gray-50/50 hover:bg-gray-100 transition-colors text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary"
+            className="w-full flex items-center justify-between p-5 bg-gray-50/50 hover:bg-gray-100 transition-colors text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary"
             aria-expanded={isAccordionOpen}
             aria-controls={`${id}-content`}
           >
             <div className="flex items-center">
-              <span className={`w-2 h-2 rounded-full mr-3 ${isAccordionOpen ? 'bg-brand-primary' : 'bg-gray-300'}`}></span>
+              <span className={`w-2 h-2 rounded-full mr-3 ${isAccordionOpen ? 'bg-brand-primary shadow-sm' : 'bg-gray-300'}`}></span>
               {label}
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform duration-300 ${isAccordionOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
           </button>
-          <div id={`${id}-content`} role="region" className={`transition-all duration-300 ease-in-out ${isAccordionOpen ? 'max-h-[2000px] opacity-100 p-4 border-t border-gray-100' : 'max-h-0 opacity-0 overflow-hidden p-0'}`}>
+          <div id={`${id}-content`} role="region" className={`transition-all duration-300 ease-in-out ${isAccordionOpen ? 'max-h-[2000px] opacity-100 p-6 border-t border-gray-100' : 'max-h-0 opacity-0 overflow-hidden p-0'}`}>
             {children}
           </div>
         </div>
       );
-
-    case 'typography':
-      const Tag = (headingLevel || 'p') as any;
-      const tagStyles: any = {
-        h1: 'text-4xl font-extrabold mb-4 tracking-tight',
-        h2: 'text-3xl font-bold mb-3 tracking-tight',
-        h3: 'text-2xl font-bold mb-2',
-        h4: 'text-xl font-bold mb-2',
-        p: 'text-base text-gray-600 leading-relaxed',
-      };
-      return <div className="w-full" style={appearanceStyle} {...commonProps}><Tag className={tagStyles[Tag] || tagStyles.p}>{textContent || 'Type something here...'}</Tag></div>;
 
     case 'text':
     case 'date':
@@ -227,7 +223,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             disabled={disabled} 
             rows={4} 
             defaultValue={defaultValue}
-            className={`${inputBaseClasses} ${sizeClass}`} 
+            className={`${inputBaseClasses} ${sizeClass} resize-none`} 
             style={appearanceStyle} 
             {...commonProps} 
           />
@@ -245,7 +241,7 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
             disabled={disabled} 
             multiple={multiple} 
             defaultValue={defaultValue}
-            className={`${inputBaseClasses} ${sizeClass} cursor-pointer`} 
+            className={`${inputBaseClasses} ${sizeClass} cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:20px_20px] bg-right-4 bg-no-repeat`} 
             style={appearanceStyle} 
             {...commonProps}
           >
@@ -259,7 +255,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
       return (
         <button 
           type={type === 'reset-button' ? 'reset' : 'button'} 
-          className={`font-bold rounded-lg shadow-sm transition-all active:scale-95 outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary ${sizeClass} ${type === 'button' ? 'bg-brand-primary text-white hover:bg-brand-accent' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}`} 
+          className={`
+            font-black rounded-2xl shadow-elevated transition-all active:scale-95 outline-none focus:ring-4 focus:ring-brand-primary/20 
+            ${sizeClass} 
+            ${type === 'button' ? 'bg-brand-primary text-white hover:bg-brand-accent hover:shadow-lg' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'}
+          `} 
           style={appearanceStyle} 
           {...commonProps}
         >
@@ -269,25 +269,28 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
 
     case 'checkbox':
       return (
-        <div className="flex items-center space-x-3 py-2 cursor-pointer group" style={appearanceStyle}>
-          <input 
-            type="checkbox" 
-            name={name} 
-            id={id} 
-            disabled={disabled} 
-            defaultChecked={defaultValue === 'true' || defaultValue === label}
-            className={`w-5 h-5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary transition-all cursor-pointer ${preview ? '' : 'pointer-events-none'}`} 
-            {...commonProps} 
-          />
-          <label htmlFor={id} className="text-sm font-semibold text-gray-700 cursor-pointer select-none group-hover:text-brand-primary transition-colors">{label}</label>
+        <div className={`flex items-center space-x-4 py-3 cursor-pointer group rounded-xl px-2 hover:bg-gray-50 transition-colors ${errorMessage ? 'bg-red-50/50' : ''}`} style={appearanceStyle}>
+          <div className="relative flex items-center">
+            <input 
+              type="checkbox" 
+              name={name} 
+              id={id} 
+              disabled={disabled} 
+              defaultChecked={defaultValue === 'true' || defaultValue === label}
+              className={`w-6 h-6 rounded-lg border-2 border-gray-200 text-brand-primary focus:ring-brand-primary transition-all cursor-pointer ${preview ? '' : 'pointer-events-none'}`} 
+              {...commonProps} 
+            />
+          </div>
+          <label htmlFor={id} className={`text-sm font-bold select-none cursor-pointer transition-colors ${disabled ? 'text-gray-400' : 'text-gray-700 group-hover:text-brand-primary'}`}>{label}</label>
         </div>
       );
 
     case 'radio':
       return (
-        <fieldset className="w-full border-none p-0 m-0" style={appearanceStyle} {...commonProps}>
-          <legend className="mb-1.5 block text-[11px] font-bold text-gray-600 uppercase tracking-wider">{label}</legend>
-          <div className={`mt-2 flex ${orientation === 'vertical' ? 'flex-col space-y-3' : 'flex-row flex-wrap gap-6'}`}>
+        <fieldset className={`w-full border-none p-0 m-0 ${errorMessage ? 'bg-red-50/20 p-4 rounded-2xl' : ''}`} style={appearanceStyle} {...commonProps}>
+          <legend className="mb-3 block text-[11px] font-extrabold text-gray-500 uppercase tracking-widest">{label}</legend>
+          {/* Fix: Specifically use styles.orientation to avoid comparison with global window.orientation (which is a number) */}
+          <div className={`flex ${styles?.orientation === 'vertical' ? 'flex-col space-y-3' : 'flex-row flex-wrap gap-6'}`}>
             {options?.map((opt, i) => (
               <div key={i} className="flex items-center cursor-pointer group">
                 <input 
@@ -297,11 +300,11 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
                   disabled={disabled} 
                   value={opt}
                   defaultChecked={defaultValue === opt}
-                  className={`appearance-none w-5 h-5 border-2 border-gray-200 rounded-full checked:border-brand-primary checked:border-[6px] transition-all cursor-pointer ${preview ? '' : 'pointer-events-none'} focus:ring-2 focus:ring-brand-primary/20 focus:ring-offset-2`} 
+                  className={`appearance-none w-6 h-6 border-2 border-gray-200 rounded-full checked:border-brand-primary checked:border-[6px] transition-all cursor-pointer ${preview ? '' : 'pointer-events-none'} focus:ring-4 focus:ring-brand-primary/10`} 
                 />
                 <label 
                   htmlFor={`${id}-${i}`} 
-                  className={`ml-3 text-sm font-semibold transition-colors cursor-pointer select-none ${disabled ? 'text-gray-400' : 'text-gray-700 group-hover:text-brand-primary'}`}
+                  className={`ml-3 text-sm font-bold transition-colors cursor-pointer select-none ${disabled ? 'text-gray-400' : 'text-gray-700 group-hover:text-brand-primary'}`}
                 >
                   {opt}
                 </label>
@@ -311,26 +314,31 @@ const FormElementRenderer: React.FC<FormElementRendererProps> = ({ element, isEd
         </fieldset>
       );
 
-    case 'image':
-      return <img src={src || 'https://images.unsplash.com/photo-1481487196290-c152efe083f5?auto=format&fit=crop&q=80&w=800'} className="w-full h-auto rounded-xl object-cover shadow-panel border border-gray-100 transition-all duration-300" style={appearanceStyle} alt={ariaLabel || label} {...commonProps} />;
-
-    case 'divider':
-      return <hr className="border-t border-gray-200 my-4 transition-all duration-300" style={appearanceStyle} role="presentation" {...commonProps} />;
-
     case 'progress':
       return (
         <div className="w-full" style={appearanceStyle} {...commonProps} role="progressbar" aria-valuenow={45} aria-valuemin={0} aria-valuemax={100}>
           {renderLabel()}
-          <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
-            <div className="h-full bg-brand-primary transition-all duration-500" style={{ width: '45%' }}></div>
+          <div className="h-4 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner border border-gray-200">
+            <div className="h-full bg-brand-primary transition-all duration-700 ease-out shadow-sm" style={{ width: '45%' }}></div>
           </div>
         </div>
       );
 
+    case 'typography':
+      const TypographyTag = (headingLevel || 'p') as any;
+      const typographyStyles: any = {
+        h1: 'text-4xl font-black mb-6 tracking-tighter text-gray-900',
+        h2: 'text-3xl font-black mb-4 tracking-tighter text-gray-800',
+        h3: 'text-2xl font-extrabold mb-3 tracking-tight text-gray-800',
+        h4: 'text-xl font-bold mb-2 text-gray-700',
+        p: 'text-base text-gray-600 leading-relaxed font-medium',
+      };
+      return <div className="w-full" style={appearanceStyle} {...commonProps}><TypographyTag className={typographyStyles[TypographyTag] || typographyStyles.p}>{textContent || (preview ? '' : 'Double click to edit text content')}</TypographyTag></div>;
+
     default:
       return (
-        <div className="p-4 bg-gray-50 text-gray-400 text-xs rounded-lg border border-dashed border-gray-200 flex items-center justify-center italic">
-          Placeholder for {type}
+        <div className="p-4 bg-gray-50 text-gray-400 text-[10px] font-bold rounded-xl border border-dashed border-gray-200 flex items-center justify-center italic">
+          {type} Component Placeholder
         </div>
       );
   }

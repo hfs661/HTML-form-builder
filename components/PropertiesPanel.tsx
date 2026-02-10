@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { FormElement, ElementStyle, LogicCondition, ConditionalRule, BulkAction } from '../types';
 import { getStyleSuggestions } from '../services/geminiService';
@@ -10,6 +9,7 @@ interface PropertiesPanelProps {
   updateElement: (id: string, updatedProps: Partial<FormElement>) => void;
   closePanel: () => void;
   onDuplicate?: (id: string) => void;
+  onSaveTemplate?: (id: string) => void;
   onGroup?: () => void;
   onApplyStyleToChildren?: (parentId: string, styles: ElementStyle) => void;
 }
@@ -41,12 +41,12 @@ const PropertySelect: React.FC<{ label: string; value: string | undefined; onCha
   </div>
 );
 
-const PropertyToggle: React.FC<{ label: string; checked: boolean; onChange: (val: boolean) => void }> = ({ label, checked, onChange }) => (
+const PropertyToggle: React.FC<{ label: string; checked: boolean; onChange: (val: boolean) => void; danger?: boolean }> = ({ label, checked, onChange, danger }) => (
   <label className="flex items-center justify-between mb-4 cursor-pointer group">
-    <span className="text-xs font-semibold text-gray-600 group-hover:text-brand-primary transition-colors">{label}</span>
+    <span className={`text-xs font-semibold transition-colors ${danger && checked ? 'text-red-500' : 'text-gray-600 group-hover:text-brand-primary'}`}>{label}</span>
     <div className="relative inline-flex items-center cursor-pointer">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="sr-only peer" />
-      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-primary shadow-inner"></div>
+      <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${danger ? 'peer-checked:bg-amber-500' : 'peer-checked:bg-brand-primary'} shadow-inner`}></div>
     </div>
   </label>
 );
@@ -80,11 +80,11 @@ const LogicOperators = [
   { value: 'ends_with', label: 'Ends With' },
   { value: 'greater_than', label: 'Greater Than' },
   { value: 'less_than', label: 'Less Than' },
-  { value: 'is_empty', label: 'Is Empty' },
-  { value: 'is_not_empty', label: 'Is Not Empty' },
+  { value: 'is_empty', label: 'Is Empty / Unchecked' },
+  { value: 'is_not_empty', label: 'Is Not Empty / Checked' },
 ];
 
-const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, selectedIds, allElements, updateElement, closePanel, onDuplicate, onGroup, onApplyStyleToChildren }) => {
+const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, selectedIds, allElements, updateElement, closePanel, onDuplicate, onSaveTemplate, onGroup, onApplyStyleToChildren }) => {
   const [activeTab, setActiveTab] = useState<'content' | 'style' | 'logic'>('content');
   const [isGenerating, setIsGenerating] = useState(false);
   const [stylePrompt, setStylePrompt] = useState('');
@@ -128,13 +128,13 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
 
   if (selectedIds.length > 1) {
     return (
-      <div className="h-full flex flex-col p-6 bg-white animate-slide-in-right">
+      <div className="h-full flex flex-col p-8 bg-white animate-slide-in-right">
         <h2 className="text-xl font-black text-gray-900 mb-6">Multi-Select</h2>
-        <div className="bg-brand-primary/5 border border-brand-primary/10 rounded-2xl p-6 text-center shadow-soft">
-          <p className="text-sm font-bold text-brand-primary mb-4">{selectedIds.length} elements selected</p>
+        <div className="bg-brand-primary/5 border border-brand-primary/10 rounded-3xl p-8 text-center shadow-panel">
+          <p className="text-sm font-bold text-brand-primary mb-6">{selectedIds.length} elements selected</p>
           <button 
             onClick={() => onGroup?.()} 
-            className="w-full py-3 px-4 bg-brand-primary text-white rounded-xl font-bold shadow-soft hover:bg-brand-accent transition-all active:scale-95"
+            className="w-full py-4 px-6 bg-brand-primary text-white rounded-2xl font-black shadow-elevated hover:bg-brand-accent transition-all active:scale-95 text-xs uppercase tracking-widest"
           >
             Group into Container
           </button>
@@ -147,10 +147,10 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
     return (
       <div className="h-full flex items-center justify-center p-8 text-center text-gray-300">
         <div>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto mb-6 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
           </svg>
-          <p className="text-sm font-medium">Select an element to configure</p>
+          <p className="text-xs font-bold uppercase tracking-widest">Select an element to configure</p>
         </div>
       </div>
     );
@@ -161,11 +161,19 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
   return (
     <div className="h-full flex flex-col bg-white overflow-hidden shadow-panel border-l border-gray-100">
       <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-black text-gray-900 leading-none mb-1">Properties</h2>
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{type}</p>
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center text-brand-primary">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z" /></svg>
+          </div>
+          <div>
+            <h2 className="text-base font-black text-gray-900 leading-none mb-1">Properties</h2>
+            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{type}</p>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1">
+          <button onClick={() => onSaveTemplate?.(id)} title="Save as Snippet" className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+          </button>
           <button onClick={() => onDuplicate?.(id)} title="Duplicate" className="p-2 text-gray-400 hover:text-brand-primary hover:bg-brand-primary/5 rounded-lg transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
           </button>
@@ -175,7 +183,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
         </div>
       </div>
 
-      <div className="flex border-b border-gray-50 bg-gray-50/30">
+      <div className="flex bg-gray-50/30">
         {(['content', 'style', 'logic'] as const).map(tab => (
           <button 
             key={tab} 
@@ -187,16 +195,28 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-2">
+      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-2 bg-white">
         {activeTab === 'content' && (
           <>
-            <CollapsibleSection title="General">
+            <CollapsibleSection title="General Config">
               <PropertyInput label="Display Label" value={selectedElement.label || ''} onChange={(val) => updateElement(id, { label: val })} />
               <PropertyInput label="ID / Variable Name" value={selectedElement.name || ''} onChange={(val) => updateElement(id, { name: val })} />
               
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 mb-4">
+                <PropertyToggle 
+                  label="Hidden by Default" 
+                  checked={!!selectedElement.hidden} 
+                  onChange={(val) => updateElement(id, { hidden: val })} 
+                  danger
+                />
+                <p className="text-[9px] font-bold text-amber-600 uppercase tracking-tighter leading-tight">
+                  Start hidden. Use "Logic" to reveal this component.
+                </p>
+              </div>
+
               {type === 'bootstrap-col' && (
-                <div className="mb-4">
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Column Span (1-12)</label>
+                <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Responsive Column Span (1-12)</label>
                   <input 
                     type="range" 
                     min="1" 
@@ -205,75 +225,73 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                     onChange={(e) => updateElement(id, { colSpan: parseInt(e.target.value) })}
                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-primary"
                   />
-                  <div className="flex justify-between text-[10px] text-gray-400 mt-1 font-bold">
+                  <div className="flex justify-between text-[10px] text-brand-primary mt-2 font-black">
                     <span>1</span>
-                    <span>{selectedElement.colSpan || 12} / 12</span>
+                    <span className="bg-brand-primary text-white px-2 py-0.5 rounded shadow-sm">{selectedElement.colSpan || 12}</span>
                     <span>12</span>
                   </div>
                 </div>
               )}
 
               {['text', 'number', 'textarea', 'email', 'select', 'radio'].includes(type) && (
-                <PropertyInput label="Default Value" value={selectedElement.defaultValue} onChange={(val) => updateElement(id, { defaultValue: val })} placeholder="Initial value..." />
+                <PropertyInput label="Initial Value" value={selectedElement.defaultValue} onChange={(val) => updateElement(id, { defaultValue: val })} placeholder="Default selection..." />
               )}
               {['text', 'number', 'textarea', 'email', 'select'].includes(type) && (
-                <PropertyInput label="Placeholder" value={selectedElement.placeholder} onChange={(val) => updateElement(id, { placeholder: val })} />
+                <PropertyInput label="Placeholder Text" value={selectedElement.placeholder} onChange={(val) => updateElement(id, { placeholder: val })} />
               )}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4 mt-2">
                 <PropertyToggle label="Required" checked={!!selectedElement.required} onChange={(val) => updateElement(id, { required: val })} />
                 <PropertyToggle label="Disabled" checked={!!selectedElement.disabled} onChange={(val) => updateElement(id, { disabled: val })} />
               </div>
             </CollapsibleSection>
 
-            {/* Options Management for Select/Radio elements */}
             {(type === 'select' || type === 'radio') && (
-              <CollapsibleSection title="Options Management">
+              <CollapsibleSection title="Choices Configuration">
                  <div className="mb-4">
                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Options List (One per line)</label>
                     <textarea 
                       value={selectedElement.options?.join('\n') || ''}
                       onChange={(e) => handleOptionsChange(e.target.value)}
-                      placeholder="Enter options here..."
-                      className="w-full h-32 p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary focus:bg-white transition-all shadow-sm font-mono"
+                      placeholder="Choice A&#10;Choice B"
+                      className="w-full h-40 p-3 text-xs bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-brand-primary/5 focus:bg-white transition-all shadow-inner font-mono"
                     />
-                    <p className="mt-2 text-[9px] text-brand-primary font-bold italic">
-                      💡 By default: Name = Value = ID
-                    </p>
                  </div>
               </CollapsibleSection>
             )}
 
-            <CollapsibleSection title="Accessibility">
-               <PropertyInput label="ARIA Label" value={selectedElement.ariaLabel} onChange={(val) => updateElement(id, { ariaLabel: val })} placeholder="Screen reader label" />
-               <PropertyInput label="ARIA Role" value={selectedElement.ariaRole} onChange={(val) => updateElement(id, { ariaRole: val })} placeholder="e.g. status, alert" />
+            <CollapsibleSection title="A11Y & ARIA">
+               <PropertyInput label="ARIA Label" value={selectedElement.ariaLabel} onChange={(val) => updateElement(id, { ariaLabel: val })} />
+               <PropertyInput label="ARIA Role" value={selectedElement.ariaRole} onChange={(val) => updateElement(id, { ariaRole: val })} />
             </CollapsibleSection>
           </>
         )}
 
         {activeTab === 'style' && (
           <>
-            <CollapsibleSection title="AI Styling ✨">
-              <textarea 
-                value={stylePrompt}
-                onChange={(e) => setStylePrompt(e.target.value)}
-                placeholder="Describe a style: e.g. 'luxury glassmorphism card'"
-                className="w-full p-2.5 text-xs bg-gray-50 border border-gray-200 rounded-lg outline-none mb-3 min-h-[60px]"
-              />
-              <button 
-                onClick={handleAiStyle}
-                disabled={isGenerating}
-                className="w-full py-2 bg-brand-primary text-white text-[10px] font-black uppercase rounded-lg shadow-soft hover:bg-brand-accent transition-all flex items-center justify-center space-x-2"
-              >
-                {isGenerating ? "..." : "Generate Styling"}
-              </button>
+            <CollapsibleSection title="AI Styling Assistant ✨">
+              <div className="p-4 bg-gray-900 rounded-2xl shadow-panel mb-4">
+                <textarea 
+                  value={stylePrompt}
+                  onChange={(e) => setStylePrompt(e.target.value)}
+                  placeholder="e.g. 'rounded glass button' or 'corporate style'"
+                  className="w-full p-3 text-xs bg-gray-800 text-white border border-gray-700 rounded-xl outline-none mb-4 min-h-[80px]"
+                />
+                <button 
+                  onClick={handleAiStyle}
+                  disabled={isGenerating}
+                  className="w-full py-3 bg-brand-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-elevated hover:bg-brand-accent transition-all flex items-center justify-center space-x-2"
+                >
+                  {isGenerating ? "Processing..." : "Generate Styling"}
+                </button>
+              </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="Appearance">
-              <PropertyInput label="BG Color" type="text" value={styles.backgroundColor} onChange={(val) => updateElement(id, { styles: { ...styles, backgroundColor: val } })} placeholder="#ffffff" />
-              <PropertyInput label="Text Color" type="text" value={styles.textColor} onChange={(val) => updateElement(id, { styles: { ...styles, textColor: val } })} placeholder="#000000" />
+            <CollapsibleSection title="Visual Controls">
+              <PropertyInput label="Background" type="text" value={styles.backgroundColor} onChange={(val) => updateElement(id, { styles: { ...styles, backgroundColor: val } })} />
+              <PropertyInput label="Text Color" type="text" value={styles.textColor} onChange={(val) => updateElement(id, { styles: { ...styles, textColor: val } })} />
               <div className="grid grid-cols-2 gap-4">
                 <PropertyInput label="Radius" value={styles.borderRadius} onChange={(val) => updateElement(id, { styles: { ...styles, borderRadius: val } })} />
-                <PropertyInput label="B-Width" value={styles.borderWidth} onChange={(val) => updateElement(id, { styles: { ...styles, borderWidth: val } })} />
+                <PropertyInput label="Border" value={styles.borderWidth} onChange={(val) => updateElement(id, { styles: { ...styles, borderWidth: val } })} />
               </div>
               <PropertyInput label="Padding" value={styles.padding} onChange={(val) => updateElement(id, { styles: { ...styles, padding: val } })} />
             </CollapsibleSection>
@@ -281,21 +299,30 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
         )}
 
         {activeTab === 'logic' && (
-          <div className="space-y-4 animate-in slide-in-from-right-2 duration-300">
-            {/* Visibility Rules (PULL Logic) */}
+          <div className="space-y-4 animate-fade-in-staggered">
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6 text-[10px] font-medium text-blue-800 leading-relaxed">
+              <p className="font-bold uppercase tracking-wider mb-2">💡 Logic Pro-Tips:</p>
+              <ul className="list-disc pl-4 space-y-1">
+                <li><strong>Checkboxes:</strong> Use "true" to match checked, "false" for unchecked.</li>
+                <li><strong>Radios:</strong> Match against the exact label text of the choice.</li>
+                <li><strong>Visibility:</strong> Controls whether THIS component is seen based on others.</li>
+                <li><strong>Conditional Actions:</strong> Changes OTHER components when THIS one changes.</li>
+              </ul>
+            </div>
+
             <CollapsibleSection 
-              title="Visibility Engine" 
+              title="Visibility Rules (PULL)" 
               icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>}
             >
-              <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="space-y-4 p-5 bg-gray-50 rounded-2xl border border-gray-100">
                 <PropertySelect 
-                  label="Action Type" 
+                  label="Display State" 
                   value={logic.action || 'show'} 
                   onChange={(val) => updateElement(id, { logic: { ...logic, action: val as any } })}
                   options={[{ value: 'show', label: 'Show if...' }, { value: 'hide', label: 'Hide if...' }]}
                 />
                 <PropertySelect 
-                  label="Trigger Source" 
+                  label="Field to Monitor" 
                   value={logic.triggerId} 
                   onChange={(val) => updateElement(id, { logic: { ...logic, triggerId: val } })}
                   options={fieldOptions}
@@ -303,75 +330,46 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                 {logic.triggerId && (
                   <>
                     <PropertySelect 
-                      label="Logic Operator" 
+                      label="Logical Condition" 
                       value={logic.condition} 
                       onChange={(val) => updateElement(id, { logic: { ...logic, condition: val as any } })}
                       options={LogicOperators}
                     />
                     <PropertyInput 
-                      label="Target Value" 
+                      label="Trigger Value" 
                       value={logic.value} 
                       onChange={(val) => updateElement(id, { logic: { ...logic, value: val } })} 
+                      placeholder="e.g. true or Choice Label"
                     />
                   </>
                 )}
-                <button 
-                  onClick={() => updateElement(id, { logic: undefined })}
-                  className="w-full mt-2 py-2 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  Clear Visibility Rules
-                </button>
-              </div>
-            </CollapsibleSection>
-
-            {/* Validation Rules */}
-            <CollapsibleSection 
-              title="Validation Suite" 
-              icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>}
-            >
-              <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <PropertySelect 
-                  label="Condition" 
-                  value={validationLogic.condition || 'none'} 
-                  onChange={(val) => updateElement(id, { validationLogic: { ...validationLogic, condition: val as any } })}
-                  options={[{ value: 'none', label: 'No Validation' }, { value: 'matches', label: 'Must Match Field' }, { value: 'regex', label: 'Regex Pattern' }, ...LogicOperators]}
-                />
-                {validationLogic.condition === 'matches' && (
-                  <PropertySelect 
-                    label="Compare with" 
-                    value={validationLogic.triggerId} 
-                    onChange={(val) => updateElement(id, { validationLogic: { ...validationLogic, triggerId: val } })}
-                    options={fieldOptions}
-                  />
-                )}
-                {validationLogic.condition === 'regex' && (
-                  <PropertyInput label="Regex Pattern" value={validationLogic.value} onChange={(val) => updateElement(id, { validationLogic: { ...validationLogic, value: val } })} />
-                )}
-                {validationLogic.condition !== 'none' && (
-                  <PropertyInput label="Error Message" value={validationLogic.errorMessage} onChange={(val) => updateElement(id, { validationLogic: { ...validationLogic, errorMessage: val } })} placeholder="e.g. 'Email is required'" />
+                {logic.triggerId && (
+                   <button 
+                    onClick={() => updateElement(id, { logic: undefined })}
+                    className="w-full mt-2 py-2 text-[9px] font-black uppercase text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    Clear Visibility Rule
+                  </button>
                 )}
               </div>
             </CollapsibleSection>
 
-            {/* Conditional Actions (PUSH Logic) */}
             <CollapsibleSection 
-              title="Conditional Actions" 
+              title="Conditional Actions (PUSH)" 
               icon={<svg className="w-4 h-4" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>}
             >
               <div className="space-y-4">
                 {conditionalRules.map((rule, index) => (
-                  <div key={rule.id} className="p-4 bg-slate-50 rounded-xl border border-indigo-100 space-y-3 relative group/rule">
+                  <div key={rule.id} className="p-4 bg-white rounded-xl border border-indigo-100 space-y-3 relative shadow-sm">
                     <button 
                       onClick={() => updateElement(id, { conditionalRules: conditionalRules.filter(r => r.id !== rule.id) })}
-                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 transition-colors"
+                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500"
                     >
                       <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg>
                     </button>
-                    <div className="text-[10px] font-black text-indigo-500 uppercase tracking-widest flex items-center mb-2">
-                       Rule #{index + 1}
-                    </div>
+                    <div className="text-[10px] font-black text-indigo-500 uppercase">Rule {index + 1}</div>
                     <PropertySelect 
-                      label="If this value..." 
+                      label="If this field is..." 
                       value={rule.condition} 
                       onChange={(val) => {
                         const newRules = [...conditionalRules];
@@ -381,21 +379,22 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                       options={LogicOperators}
                     />
                     <PropertyInput 
-                      label="Matches" 
+                      label="Matches value..." 
                       value={rule.matchValue} 
                       onChange={(val) => {
                         const newRules = [...conditionalRules];
                         newRules[index].matchValue = val;
                         updateElement(id, { conditionalRules: newRules });
                       }}
+                      placeholder="e.g. true"
                     />
                     
-                    <div className="border-t border-indigo-50 pt-3 space-y-2">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Apply Actions</span>
+                    <div className="border-t border-indigo-50 pt-3 space-y-3">
+                      <span className="text-[9px] font-black text-slate-400 uppercase">Then Apply Actions:</span>
                       {rule.actions.map((action, aIdx) => (
-                        <div key={aIdx} className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm space-y-2">
+                        <div key={aIdx} className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 space-y-2">
                            <PropertySelect 
-                              label="Target Fields" 
+                              label="Target Component" 
                               value={action.targetIds[0]} 
                               onChange={(val) => {
                                 const newRules = [...conditionalRules];
@@ -406,7 +405,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                            />
                            <div className="grid grid-cols-2 gap-2">
                              <PropertySelect 
-                                label="Property" 
+                                label="Update Property" 
                                 value={action.property} 
                                 onChange={(val) => {
                                   const newRules = [...conditionalRules];
@@ -414,23 +413,32 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                                   updateElement(id, { conditionalRules: newRules });
                                 }}
                                 options={[
-                                  { value: 'hidden', label: 'Hidden' },
+                                  { value: 'hidden', label: 'Visibility' },
                                   { value: 'disabled', label: 'Disabled' },
                                   { value: 'required', label: 'Required' },
-                                  { value: 'backgroundColor', label: 'BG Color' }
+                                  { value: 'backgroundColor', label: 'Background' }
                                 ]}
                              />
                              <PropertyInput 
-                                label="To Value" 
+                                label="New Value" 
                                 value={action.value} 
                                 onChange={(val) => {
                                   const newRules = [...conditionalRules];
                                   newRules[index].actions[aIdx].value = val === 'true' ? true : val === 'false' ? false : val;
                                   updateElement(id, { conditionalRules: newRules });
                                 }}
-                                placeholder="e.g. true"
                              />
                            </div>
+                           <button 
+                            onClick={() => {
+                              const newRules = [...conditionalRules];
+                              newRules[index].actions = newRules[index].actions.filter((_, i) => i !== aIdx);
+                              updateElement(id, { conditionalRules: newRules });
+                            }}
+                            className="text-[9px] text-red-400 hover:text-red-600 font-bold uppercase"
+                           >
+                            - Remove Action
+                           </button>
                         </div>
                       ))}
                       <button 
@@ -439,7 +447,7 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                           newRules[index].actions.push({ targetIds: [], property: 'hidden', value: true });
                           updateElement(id, { conditionalRules: newRules });
                         }}
-                        className="w-full py-1.5 text-[8px] font-bold uppercase text-indigo-400 hover:text-indigo-600 border border-dashed border-indigo-100 rounded"
+                        className="w-full py-2 text-[9px] font-black uppercase text-indigo-500 border border-dashed border-indigo-200 rounded-lg hover:bg-indigo-50"
                       >
                         + Add Target Action
                       </button>
@@ -456,9 +464,9 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({ selectedElement, sele
                     };
                     updateElement(id, { conditionalRules: [...conditionalRules, newRule] });
                   }}
-                  className="w-full py-3 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-all"
+                  className="w-full py-4 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-2xl shadow-elevated hover:bg-indigo-700 transition-all"
                 >
-                  Create New Action Rule
+                  Create Action Rule
                 </button>
               </div>
             </CollapsibleSection>

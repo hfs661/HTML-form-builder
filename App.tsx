@@ -7,7 +7,7 @@ import CodeModal from './components/CodeModal';
 import PreviewModal from './components/PreviewModal';
 import ConfirmationDialog from './components/ConfirmationDialog';
 import ImportModal from './components/ImportModal';
-import type { FormElement, FormElementType, ElementStyle } from './types';
+import type { FormElement, FormElementType, ElementStyle, SnippetItem } from './types';
 import { getFormSuggestions } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -89,6 +89,38 @@ const App: React.FC = () => {
       return findAndClone(prev);
     });
   }, []);
+
+  const saveAsTemplate = useCallback((id: string) => {
+    const find = (list: FormElement[]): FormElement | null => {
+      for (const el of list) {
+        if (el.id === id) return el;
+        if (el.children) {
+          const found = find(el.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const element = find(formElements);
+    if (!element) return;
+
+    const templateName = prompt("Enter a name for your custom template:", element.label || "My Custom Snippet");
+    if (!templateName) return;
+
+    const newTemplate: SnippetItem = {
+      id: `template-${Date.now()}`,
+      label: templateName,
+      elements: [element]
+    };
+
+    const saved = localStorage.getItem('formBuilderTemplates');
+    const templates = saved ? JSON.parse(saved) : [];
+    templates.push(newTemplate);
+    localStorage.setItem('formBuilderTemplates', JSON.stringify(templates));
+    window.dispatchEvent(new Event('templatesUpdated'));
+    alert(`"${templateName}" saved to toolkit!`);
+  }, [formElements]);
 
   const groupSelectedElements = useCallback(() => {
     if (selectedIds.length < 2) return;
@@ -279,6 +311,7 @@ const App: React.FC = () => {
             closePanel={() => setSelectedIds([])} 
             allElements={formElements} 
             onDuplicate={duplicateElement}
+            onSaveTemplate={saveAsTemplate}
             onGroup={groupSelectedElements}
             onApplyStyleToChildren={applyStyleToChildren}
           />

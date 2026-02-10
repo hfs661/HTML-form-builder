@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { FormElement, DataLogicRule } from '../types';
+import type { FormElement } from '../types';
 import FormElementRenderer from './FormElementRenderer';
 
 interface PreviewModalProps {
@@ -22,6 +22,16 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
         if (el.name && el.defaultValue !== undefined) {
           initialData[el.name] = el.defaultValue;
         }
+        // Handle radio defaults if specified
+        if (el.type === 'radio' && el.defaultValue && el.name) {
+          initialData[el.name] = el.defaultValue;
+        }
+        // Handle checkbox defaults
+        if (el.type === 'checkbox' && el.name) {
+          // Fix: defaultValue is defined as string in types.ts.
+          // Comparing it to boolean true is a type error. Only comparing against string 'true'.
+          initialData[el.name] = el.defaultValue === 'true';
+        }
         if (el.children) extractDefaults(el.children);
       });
     };
@@ -40,10 +50,19 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
       return null;
   }, []);
 
-  const evaluateCondition = (condition: string, value: any, targetValue: string) => {
-    const valStr = (value ?? '').toString().toLowerCase();
+  const evaluateCondition = (condition: string, actualValue: any, targetValue: string) => {
+    // Standardize inputs for comparison
+    const valStr = (actualValue ?? '').toString().toLowerCase();
     const targetStr = (targetValue ?? '').toLowerCase();
-    const valNum = Number(value);
+    
+    // Support boolean comparison specifically for checkboxes
+    if (typeof actualValue === 'boolean') {
+      const targetBool = targetStr === 'true' || targetStr === 'checked' || targetStr === '1';
+      if (condition === 'equals') return actualValue === targetBool;
+      if (condition === 'not_equals') return actualValue !== targetBool;
+    }
+
+    const valNum = Number(actualValue);
     const targetNum = Number(targetValue);
 
     switch(condition) {
@@ -54,8 +73,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
         case 'ends_with': return valStr.endsWith(targetStr);
         case 'greater_than': return !isNaN(valNum) && !isNaN(targetNum) && valNum > targetNum;
         case 'less_than': return !isNaN(valNum) && !isNaN(targetNum) && valNum < targetNum;
-        case 'is_empty': return !value || valStr === '';
-        case 'is_not_empty': return !!value && valStr !== '';
+        case 'is_empty': return !actualValue || valStr === '' || actualValue === false;
+        case 'is_not_empty': return !!actualValue && valStr !== '' && actualValue !== false;
         default: return false;
     }
   };
@@ -70,6 +89,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
             list.forEach(el => {
                 let isVisible = !el.hidden;
                 
+                // Visibility Logic (PULL)
                 if (el.logic?.triggerId) {
                     const triggerEl = findElementById(elements, el.logic.triggerId);
                     if (triggerEl) {
@@ -82,6 +102,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                 if (isVisible && el.id) {
                     visible.push(el.id);
                     
+                    // Conditional Rules (PUSH) - when THIS field changes, it affects OTHERS
                     if (el.conditionalRules) {
                         const myVal = formData[el.name || ''];
                         el.conditionalRules.forEach(rule => {
@@ -93,9 +114,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                                           ...overrides[tId], 
                                           [action.property]: action.value 
                                         };
+                                        // Handle nested style overrides
                                         if (['backgroundColor', 'textColor'].includes(action.property)) {
                                           const targetEl = findElementById(elements, tId);
-                                          const existingStyles = { ...targetEl?.styles, ...overrides[tId]?.styles };
+                                          const existingStyles = { ...(targetEl?.styles || {}), ...(overrides[tId]?.styles || {}) };
                                           overrides[tId].styles = { ...existingStyles, [action.property]: action.value };
                                         }
                                     });
@@ -104,28 +126,29 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                         });
                     }
 
-                    let myVal = formData[el.name || '']?.toString() || '';
+                    // Validation Logic
+                    let myVal = formData[el.name || ''];
                     let isInvalid = false;
                     let validationMsg = "Invalid value";
 
-                    if (el.required && (!formData[el.name || ''] || myVal === '')) {
+                    if (el.required && (myVal === undefined || myVal === null || myVal === '' || myVal === false)) {
                         isInvalid = true;
-                        validationMsg = "This field is required";
+                        validationMsg = `${el.label || 'Field'} is required`;
                     } else if (el.validationLogic?.condition && el.validationLogic.condition !== 'none') {
                         if (el.validationLogic.condition === 'regex' && el.validationLogic.value) {
                              try {
                                  const regex = new RegExp(el.validationLogic.value);
-                                 isInvalid = !regex.test(myVal);
+                                 isInvalid = !regex.test(String(myVal || ''));
                              } catch(e) { console.warn("Invalid regex pattern"); }
                         } else if (el.validationLogic?.triggerId) {
                             const triggerEl = findElementById(elements, el.validationLogic.triggerId);
                             if (triggerEl) {
-                                const triggerVal = formData[triggerEl.name || '']?.toString() || '';
+                                const triggerVal = formData[triggerEl.name || ''];
                                 switch (el.validationLogic.condition) {
                                     case 'matches':
-                                    case 'equals': isInvalid = myVal !== triggerVal; break;
-                                    case 'not_equals': isInvalid = myVal === triggerVal; break;
-                                    case 'contains': isInvalid = !myVal.includes(triggerVal); break;
+                                    case 'equals': isInvalid = String(myVal) !== String(triggerVal); break;
+                                    case 'not_equals': isInvalid = String(myVal) === String(triggerVal); break;
+                                    case 'contains': isInvalid = !String(myVal).includes(String(triggerVal)); break;
                                     case 'greater_than': isInvalid = Number(myVal) <= Number(triggerVal); break;
                                     case 'less_than': isInvalid = Number(myVal) >= Number(triggerVal); break;
                                 }
@@ -175,7 +198,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (Object.keys(errors).length === 0) {
-        alert("Form submitted successfully!\n" + JSON.stringify(formData, null, 2));
+        alert("Success! Data collected:\n" + JSON.stringify(formData, null, 2));
     } else {
         alert("Validation Errors:\n" + Object.values(errors).join('\n'));
     }
@@ -186,6 +209,8 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
           if (!el.id) return null;
           const override = dynamicOverrides[el.id] || {};
           let finalVisible = visibleElements.includes(el.id);
+          
+          // Direct override visibility has highest precedence
           if (override.hidden === true) finalVisible = false;
           if (override.hidden === false) finalVisible = true;
           
@@ -203,7 +228,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
                     {el.children && renderElements(el.children)}
                 </FormElementRenderer>
                 {el.name && errorText && (
-                    <p id={`${el.id}-error`} role="alert" className="text-red-500 text-[10px] mt-1.5 font-bold animate-fade-in-staggered px-1">
+                    <p id={`${el.id}-error`} role="alert" className="text-red-500 text-[10px] mt-2 font-black uppercase tracking-widest px-2">
                         {errorText}
                     </p>
                 )}
@@ -213,31 +238,33 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ elements, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-fade-in-staggered">
-        <div className="flex justify-between items-center p-6 border-b bg-brand-secondary/30">
-          <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-brand-primary rounded-2xl flex items-center justify-center text-white shadow-elevated">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-6 backdrop-blur-md">
+      <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-fade-in-staggered border border-white/20">
+        <div className="flex justify-between items-center p-8 border-b bg-brand-secondary/30">
+          <div className="flex items-center space-x-6">
+              <div className="w-14 h-14 bg-brand-primary rounded-2xl flex items-center justify-center text-white shadow-elevated">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
               </div>
               <div>
-                <h2 className="text-xl font-black text-brand-text tracking-tight">Interactive Preview</h2>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Logic Simulator</p>
+                <h2 className="text-2xl font-black text-brand-text tracking-tighter">Interactive Form Simulator</h2>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Logic: Active | Validation: Active</p>
               </div>
           </div>
-          <button onClick={onClose} className="p-3 text-gray-400 hover:text-gray-900 transition-colors rounded-xl hover:bg-gray-100">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <button onClick={onClose} className="p-4 text-gray-400 hover:text-gray-900 transition-colors rounded-2xl hover:bg-gray-100">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        <div className="p-10 overflow-y-auto flex-grow bg-white custom-scrollbar">
-            <form ref={formRef} onSubmit={handleSubmit} className="space-y-10" onChange={handleInputChange}>
-                {renderElements(elements)}
-                <div className="pt-8 border-t border-gray-100 flex justify-end">
-                    <button type="submit" className="px-12 py-4 bg-brand-primary text-white rounded-2xl font-black shadow-elevated hover:bg-brand-accent transition-all active:scale-95 text-sm uppercase tracking-wider">
-                        Submit and Test
-                    </button>
-                </div>
-            </form>
+        <div className="p-12 overflow-y-auto flex-grow bg-white custom-scrollbar">
+            <div className="max-w-3xl mx-auto">
+              <form ref={formRef} onSubmit={handleSubmit} className="space-y-12" onChange={handleInputChange}>
+                  {renderElements(elements)}
+                  <div className="pt-12 border-t border-gray-100 flex justify-end">
+                      <button type="submit" className="px-16 py-5 bg-brand-primary text-white rounded-[2rem] font-black shadow-elevated hover:bg-brand-accent transition-all active:scale-95 text-xs uppercase tracking-widest">
+                          Submit & Test Logic
+                      </button>
+                  </div>
+              </form>
+            </div>
         </div>
       </div>
     </div>
